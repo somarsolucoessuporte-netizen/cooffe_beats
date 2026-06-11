@@ -1,18 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+const ROTAS_PROTEGIDAS = ["/pedidos", "/kds", "/dashboard", "/admin"];
+
 export async function proxy(req: NextRequest) {
-  const rotasProtegidas = ["/painel/pedidos", "/painel/kds", "/painel/dashboard"];
-  const pathname = req.nextUrl.pathname;
+  const { pathname } = req.nextUrl;
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-  const ehRotaProtegida = rotasProtegidas.some((rota) => pathname.startsWith(rota));
+  // Redireciona usuário autenticado para fora do login
+  if (pathname === "/login" && token) {
+    return NextResponse.redirect(new URL("/pedidos", req.url));
+  }
 
-  if (ehRotaProtegida) {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) {
-      const url = req.nextUrl.clone();
-      url.pathname = "/painel/login";
-      return NextResponse.redirect(url);
+  const ehProtegida = ROTAS_PROTEGIDAS.some(
+    (r) => pathname === r || pathname.startsWith(r + "/")
+  );
+
+  if (ehProtegida && !token) {
+    const url = new URL("/login", req.url);
+    url.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (token && ehProtegida) {
+    const perfil = token.perfil as string;
+
+    // /admin/* — apenas ADMIN
+    if ((pathname === "/admin" || pathname.startsWith("/admin/")) && perfil !== "ADMIN") {
+      return NextResponse.redirect(new URL("/pedidos", req.url));
+    }
+
+    // /dashboard — ADMIN ou GERENTE
+    if (
+      pathname.startsWith("/dashboard") &&
+      perfil !== "ADMIN" &&
+      perfil !== "GERENTE"
+    ) {
+      return NextResponse.redirect(new URL("/pedidos", req.url));
     }
   }
 
@@ -20,5 +44,11 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/painel/pedidos/:path*", "/painel/kds/:path*", "/painel/dashboard/:path*"],
+  matcher: [
+    "/login",
+    "/pedidos/:path*",
+    "/kds/:path*",
+    "/dashboard/:path*",
+    "/admin/:path*",
+  ],
 };
