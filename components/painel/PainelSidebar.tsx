@@ -21,6 +21,8 @@ export default function PainelSidebar() {
   const { data: session } = useSession();
   const perfil = (session?.user as { perfil?: string } | undefined)?.perfil ?? "";
 
+  if (pathname === "/login") return null;
+
   const podeVer = (perfis?: string[]) => !perfis || perfis.includes(perfil);
 
   const linkClass = (href: string) =>

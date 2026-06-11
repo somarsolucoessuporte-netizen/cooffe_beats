@@ -27,7 +27,7 @@ export default function Login() {
         setErro("Email ou senha incorretos");
         setCarregando(false);
       } else {
-        router.push("/painel/pedidos");
+        router.push("/pedidos");
       }
     },
     [email, senha, router]
