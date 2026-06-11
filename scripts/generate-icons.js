@@ -1,32 +1,23 @@
 const sharp = require('sharp');
 const path = require('path');
 
-async function generateIcon(size, outputPath) {
-  const fontSize = Math.round(size * 0.38);
-  const svg = `
-    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${size}" height="${size}" rx="${Math.round(size * 0.18)}" fill="#C8853A"/>
-      <text
-        x="50%" y="52%"
-        dominant-baseline="middle"
-        text-anchor="middle"
-        font-family="Arial, sans-serif"
-        font-weight="bold"
-        font-size="${fontSize}"
-        fill="#1A0A00"
-      >CB</text>
-    </svg>
-  `;
-
-  await sharp(Buffer.from(svg)).png().toFile(outputPath);
-  console.log(`✅ Gerado: ${outputPath} (${size}x${size})`);
-}
+const logo = path.join(__dirname, '..', 'public', 'logo.png');
+const publicDir = path.join(__dirname, '..', 'public');
 
 async function main() {
-  const publicDir = path.join(__dirname, '..', 'public');
-  await generateIcon(192, path.join(publicDir, 'icon-192.png'));
-  await generateIcon(512, path.join(publicDir, 'icon-512.png'));
-  console.log('🎉 Ícones PWA gerados!');
+  await sharp(logo)
+    .resize(192, 192, { fit: 'contain', background: { r: 26, g: 10, b: 0, alpha: 1 } })
+    .png()
+    .toFile(path.join(publicDir, 'icon-192.png'));
+  console.log('✅ icon-192.png gerado');
+
+  await sharp(logo)
+    .resize(512, 512, { fit: 'contain', background: { r: 26, g: 10, b: 0, alpha: 1 } })
+    .png()
+    .toFile(path.join(publicDir, 'icon-512.png'));
+  console.log('✅ icon-512.png gerado');
+
+  console.log('🎉 Ícones PWA gerados a partir de logo.png!');
 }
 
 main().catch((err) => {
