@@ -3,17 +3,49 @@
 import { useEffect, useState, useRef, Suspense } from "react";
 import { playClick } from "@/lib/sounds";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
+const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }> = {
+  RECEBIDO:   { icone: "⏳", texto: "Recebido",                     cor: "text-cb-amber" },
+  EM_PREPARO: { icone: "☕", texto: "Preparando seu pedido...",      cor: "text-blue-500" },
+  PRONTO:     { icone: "🎉", texto: "Pronto! Retire no balcão",      cor: "text-green-500" },
+  ENTREGUE:   { icone: "✅", texto: "Entregue. Bom proveito!",       cor: "text-cb-marrom/50" },
+};
 
 function ConfirmacaoConteudo() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const senha = searchParams.get("senha") ?? "CB-???";
+  const senha     = searchParams.get("senha") ?? "CB-???";
+  const pedidoId  = searchParams.get("id")    ?? "";
 
   const [mostrarBotao, setMostrarBotao] = useState(false);
-  const [progresso, setProgresso] = useState(100);
+  const [progresso, setProgresso]       = useState(100);
+  const [statusAtual, setStatusAtual]   = useState("RECEBIDO");
   const tempoEstimado = 5;
-  const duracao = tempoEstimado * 60 * 1000;
-  const inicioRef = useRef(Date.now());
+  const duracao       = tempoEstimado * 60 * 1000;
+  const inicioRef     = useRef(Date.now());
+
+  // Busca status inicial + escuta realtime
+  useEffect(() => {
+    if (!pedidoId) return;
+
+    fetch(`/api/pedidos/${pedidoId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setStatusAtual(d.data.status); })
+      .catch(() => {});
+
+    const empresaId = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
+    const channel = supabase
+      .channel(`empresa-${empresaId}`)
+      .on("broadcast", { event: "pedido:atualizado" }, ({ payload }) => {
+        if ((payload as { id: string }).id === pedidoId) {
+          setStatusAtual((payload as { status: string }).status);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [pedidoId]);
 
   useEffect(() => {
     const t = setTimeout(() => setMostrarBotao(true), 8_000);
@@ -28,12 +60,14 @@ function ConfirmacaoConteudo() {
   useEffect(() => {
     const interval = setInterval(() => {
       const decorrido = Date.now() - inicioRef.current;
-      const restante = Math.max(0, 100 - (decorrido / duracao) * 100);
+      const restante  = Math.max(0, 100 - (decorrido / duracao) * 100);
       setProgresso(restante);
       if (restante === 0) clearInterval(interval);
     }, 1000);
     return () => clearInterval(interval);
   }, [duracao]);
+
+  const info = STATUS_INFO[statusAtual] ?? STATUS_INFO.RECEBIDO;
 
   return (
     <main className="h-full flex flex-col items-center justify-center gap-8 px-8 text-center animate-fadeIn">
@@ -61,12 +95,11 @@ function ConfirmacaoConteudo() {
         </div>
       </div>
 
-      {/* Mensagem */}
-      <div className="flex flex-col gap-2">
-        <p className="font-sans font-extrabold text-2xl text-cb-marrom">
-          Seu pedido está sendo preparado com carinho ☕
-        </p>
-        <p className="text-cb-marrom/60 text-lg">Previsão: ~{tempoEstimado} minutos</p>
+      {/* Status em tempo real */}
+      <div className={`flex items-center gap-3 text-2xl font-extrabold transition-all ${info.cor}
+                       ${statusAtual === "PRONTO" ? "animate-pulse" : ""}`}>
+        <span>{info.icone}</span>
+        <span>{info.texto}</span>
       </div>
 
       {/* Barra de progresso */}
@@ -76,6 +109,8 @@ function ConfirmacaoConteudo() {
           style={{ width: `${progresso}%` }}
         />
       </div>
+
+      <p className="text-cb-marrom/50 text-base">Previsão: ~{tempoEstimado} minutos</p>
 
       {mostrarBotao && (
         <button

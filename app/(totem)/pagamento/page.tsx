@@ -54,7 +54,7 @@ export default function Pagamento() {
       });
 
       limparCarrinho();
-      router.push(`/confirmacao?senha=${encodeURIComponent(senha)}`);
+      router.push(`/confirmacao?senha=${encodeURIComponent(senha)}&id=${pedidoId}`);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao processar pagamento");
       setProcessando(false);
