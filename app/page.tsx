@@ -41,7 +41,7 @@ export default function Home() {
   return (
     <div
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #F5EDD6 0%, #EDE0C4 50%, #E8D5B0 100%)" }}
+      style={{ background: "#F6F0E5" }}
       onClick={() => { playClick(); router.push("/cardapio"); }}
     >
       {/* Partículas de fundo */}
@@ -54,7 +54,7 @@ export default function Home() {
             left: p.left,
             width: p.size,
             height: p.size,
-            background: "rgba(146,64,14,0.20)",
+            background: "rgba(59,36,21,0.12)",
             "--dur": p.dur,
             "--delay": p.delay,
           } as React.CSSProperties}
@@ -93,8 +93,8 @@ export default function Home() {
                 playClick();
                 router.push("/cardapio");
               }}
-              className="mt-2 bg-amber-900 text-amber-400 font-bold font-sans text-2xl
-                         py-6 px-16 rounded-full hover:bg-amber-800 min-h-[80px]
+              className="mt-2 bg-cb-marrom text-cb-bege font-extrabold font-sans text-2xl
+                         py-6 px-16 rounded-full min-h-[80px]
                          touch-manipulation btn-totem cta-pulse"
             >
               FAZER PEDIDO

@@ -21,7 +21,6 @@ export default function Pagamento() {
     setErro(null);
 
     try {
-      // Cria o pedido
       const resPedido = await fetch("/api/pedidos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -44,9 +43,8 @@ export default function Pagamento() {
       if (!dadosPedido.ok) throw new Error(dadosPedido.error);
 
       const pedidoId = dadosPedido.data.id;
-      const senha = dadosPedido.data.senha;
+      const senha    = dadosPedido.data.senha;
 
-      // Simula pagamento
       await new Promise((res) => setTimeout(res, 1500));
 
       await fetch("/api/pagamentos/simular", {
@@ -69,14 +67,14 @@ export default function Pagamento() {
 
       <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
         <div className="text-center">
-          <h1 className="font-display text-4xl text-cb-cream font-bold">Como deseja pagar?</h1>
-          <p className="font-sans text-cb-latte mt-2 text-xl">
-            Total: <span className="text-cb-gold font-bold">{formatarMoeda(totalValor)}</span>
+          <h1 className="font-sans font-extrabold text-4xl text-cb-marrom">Como deseja pagar?</h1>
+          <p className="text-cb-marrom/60 mt-2 text-xl">
+            Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
           </p>
         </div>
 
         {erro && (
-          <div className="bg-red-900/40 border border-red-700 rounded-2xl px-6 py-4 text-red-300 font-sans text-base">
+          <div className="bg-red-50 border border-red-300 rounded-2xl px-6 py-4 text-red-600 text-base">
             {erro}
           </div>
         )}
@@ -85,55 +83,55 @@ export default function Pagamento() {
           {/* PIX */}
           <button
             disabled
-            className="flex flex-col items-center gap-3 bg-cb-mocha border border-cb-caramel/30
+            className="flex flex-col items-center gap-3 bg-white border border-cb-marrom/10
                        rounded-2xl p-6 min-h-[130px] opacity-50 cursor-not-allowed"
           >
             <span className="text-4xl">📱</span>
-            <span className="font-sans font-semibold text-cb-cream">PIX</span>
-            <span className="font-sans text-xs text-cb-caramel">Em breve</span>
+            <span className="font-sans font-extrabold text-cb-marrom">PIX</span>
+            <span className="text-xs text-cb-marrom/40">Em breve</span>
           </button>
 
           {/* Cartão */}
           <button
             disabled
-            className="flex flex-col items-center gap-3 bg-cb-mocha border border-cb-caramel/30
+            className="flex flex-col items-center gap-3 bg-white border border-cb-marrom/10
                        rounded-2xl p-6 min-h-[130px] opacity-50 cursor-not-allowed"
           >
             <span className="text-4xl">💳</span>
-            <span className="font-sans font-semibold text-cb-cream">Cartão</span>
-            <span className="font-sans text-xs text-cb-caramel">Em breve</span>
+            <span className="font-sans font-extrabold text-cb-marrom">Cartão</span>
+            <span className="text-xs text-cb-marrom/40">Em breve</span>
           </button>
 
           {/* Dinheiro */}
           <button
             disabled
-            className="flex flex-col items-center gap-3 bg-cb-mocha border border-cb-caramel/30
+            className="flex flex-col items-center gap-3 bg-white border border-cb-marrom/10
                        rounded-2xl p-6 min-h-[130px] opacity-50 cursor-not-allowed"
           >
             <span className="text-4xl">💵</span>
-            <span className="font-sans font-semibold text-cb-cream">Dinheiro</span>
-            <span className="font-sans text-xs text-cb-caramel">Chame um atendente</span>
+            <span className="font-sans font-extrabold text-cb-marrom">Dinheiro</span>
+            <span className="text-xs text-cb-marrom/40">Chame um atendente</span>
           </button>
 
-          {/* Simulado — apenas em dev */}
+          {/* Simulado */}
           {pagamentoSimuladoAtivo && (
             <button
               onClick={() => { playClick(); processarPagamento(); }}
               disabled={processando}
-              className="flex flex-col items-center gap-3 bg-cb-amber text-cb-espresso
+              className="flex flex-col items-center gap-3 bg-cb-marrom text-cb-bege
                          rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem
-                         font-bold disabled:opacity-70"
+                         font-extrabold disabled:opacity-70"
             >
               {processando ? (
                 <>
                   <span className="text-4xl animate-spin">⟳</span>
-                  <span className="font-sans font-bold">Processando...</span>
+                  <span className="font-sans font-extrabold">Processando...</span>
                 </>
               ) : (
                 <>
                   <span className="text-4xl">🧪</span>
-                  <span className="font-sans font-bold">Simulado</span>
-                  <span className="font-sans text-xs opacity-70">Apenas em teste</span>
+                  <span className="font-sans font-extrabold">Simulado</span>
+                  <span className="text-xs opacity-60">Apenas em teste</span>
                 </>
               )}
             </button>

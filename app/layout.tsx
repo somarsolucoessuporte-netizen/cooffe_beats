@@ -1,15 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display, JetBrains_Mono } from "next/font/google";
+import { Montserrat, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-sans",
+const montserrat = Montserrat({
   subsets: ["latin"],
-});
-
-const playfairDisplay = Playfair_Display({
-  variable: "--font-display",
-  subsets: ["latin"],
+  weight: ["400", "700", "800"],
+  variable: "--font-montserrat",
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -31,11 +27,11 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${inter.variable} ${playfairDisplay.variable} ${jetbrainsMono.variable} h-full`}
+      className={`${montserrat.variable} ${jetbrainsMono.variable} h-full`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#C8853A" />
+        <meta name="theme-color" content="#3B2415" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Coffee & Beats" />

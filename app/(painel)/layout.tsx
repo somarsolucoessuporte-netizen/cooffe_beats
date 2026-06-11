@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
   return (
     <SessionProviderWrapper>
-      <div className="h-full flex bg-zinc-50 text-zinc-900">
+      <div className="h-full flex bg-cb-bege text-cb-marrom">
         <PainelSidebar />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>

@@ -59,7 +59,7 @@ export default function Cardapio() {
       <HeaderTotem />
 
       {/* Chips de categorias */}
-      <div className="flex gap-2 px-4 py-3 overflow-x-auto totem-scroll border-b border-amber-900/30 shrink-0">
+      <div className="flex gap-2 px-4 py-3 overflow-x-auto totem-scroll border-b border-cb-marrom/10 shrink-0">
         {categorias.map((cat) => (
           <button
             key={cat.id}
@@ -70,8 +70,8 @@ export default function Cardapio() {
               transition-all active:scale-95
               ${
                 categoriaAtiva === cat.id
-                  ? "bg-amber-500 text-stone-900"
-                  : "bg-[#2a1200] text-amber-100/80 border border-amber-900/40"
+                  ? "bg-cb-marrom text-cb-bege"
+                  : "bg-white border border-cb-marrom/20 text-cb-marrom"
               }
             `}
           >
@@ -86,7 +86,7 @@ export default function Cardapio() {
         {carregando ? (
           <div className="grid grid-cols-3 gap-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-[#1e0f02] rounded-2xl h-44 animate-pulse" />
+              <div key={i} className="bg-cb-marrom/10 rounded-2xl h-44 animate-pulse" />
             ))}
           </div>
         ) : (
@@ -96,12 +96,12 @@ export default function Cardapio() {
                 key={produto.id}
                 href={`/produto/${produto.id}`}
                 onClick={() => playClick()}
-                className="bg-[#1e0f02] border border-[#3D1F00] rounded-2xl overflow-hidden
-                           touch-manipulation active:scale-95 btn-totem
-                           flex flex-col"
+                className="bg-white border border-cb-marrom/10 rounded-2xl overflow-hidden
+                           touch-manipulation active:scale-95 btn-totem flex flex-col
+                           shadow-sm"
               >
                 {/* Foto */}
-                <div className="relative w-full aspect-[4/3] max-h-[200px] overflow-hidden bg-gradient-to-br from-[#2a1200] to-[#3D1F00]">
+                <div className="relative w-full aspect-[4/3] max-h-[200px] overflow-hidden bg-cb-bege">
                   {produto.fotoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -116,27 +116,28 @@ export default function Cardapio() {
                   )}
 
                   {produto.destaque && (
-                    <span className="absolute top-1.5 left-1.5 bg-amber-500 text-stone-900 font-bold text-xs px-2 py-0.5 rounded-full">
+                    <span className="absolute top-1.5 left-1.5 bg-cb-amber text-cb-bege
+                                     font-bold text-xs px-2 py-0.5 rounded-full">
                       DESTAQUE
                     </span>
                   )}
 
-                  <span className="absolute bottom-2 right-2 bg-amber-500 text-stone-900
+                  <span className="absolute bottom-2 right-2 bg-cb-marrom text-cb-bege
                                    rounded-full w-9 h-9 flex items-center justify-center
-                                   font-bold text-lg shadow-md shadow-black/40">
+                                   font-bold text-lg shadow-md">
                     +
                   </span>
                 </div>
 
                 {/* Info */}
                 <div className="p-2.5 flex flex-col gap-0.5">
-                  <p className="text-sm font-semibold text-amber-200 leading-snug line-clamp-1">
+                  <p className="text-sm font-extrabold text-cb-marrom leading-snug line-clamp-1">
                     {produto.nome}
                   </p>
-                  <p className="text-xs text-amber-100/60 line-clamp-2">
+                  <p className="text-xs text-cb-marrom/60 line-clamp-2">
                     {produto.descricao}
                   </p>
-                  <p className="text-base font-bold text-amber-400 mt-1">
+                  <p className="text-base font-bold text-cb-amber mt-1">
                     {formatarMoeda(produto.preco)}
                   </p>
                 </div>

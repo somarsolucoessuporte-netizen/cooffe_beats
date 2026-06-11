@@ -15,15 +15,19 @@
   --color-cb-white: #FFFFFF;
   --color-cb-black: #000000;
 
-  /* Tipografia */
-  --font-display: "Playfair Display", serif;
-  --font-sans: "Inter", sans-serif;
+  /* Cores da marca oficial */
+  --color-cb-marrom: #3B2415;
+  --color-cb-bege: #F6F0E5;
+
+  /* Tipografia — Montserrat */
+  --font-display: var(--font-montserrat), sans-serif;
+  --font-sans: var(--font-montserrat), sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
 :root {
-  --background: #1A0A00;
-  --foreground: #F5EDD6;
+  --background: #F6F0E5;
+  --foreground: #3B2415;
 }
 
 html,

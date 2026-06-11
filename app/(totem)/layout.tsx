@@ -12,7 +12,7 @@ export default function TotemLayout({
 }) {
   return (
     <CarrinhoProvider>
-      <div className="h-screen w-screen overflow-hidden bg-cb-espresso text-cb-cream font-sans">
+      <div className="h-screen w-screen overflow-hidden bg-cb-bege text-cb-marrom font-sans">
         {children}
       </div>
     </CarrinhoProvider>
