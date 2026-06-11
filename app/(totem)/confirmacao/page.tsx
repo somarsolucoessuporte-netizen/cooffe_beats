@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, Suspense } from "react";
+import { playClick } from "@/lib/sounds";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function ConfirmacaoConteudo() {
@@ -46,7 +47,7 @@ function ConfirmacaoConteudo() {
   }, [duracao]);
 
   return (
-    <main className="h-full flex flex-col items-center justify-center gap-8 px-8 text-center">
+    <main className="h-full flex flex-col items-center justify-center gap-8 px-8 text-center animate-fadeIn">
       {/* Animação de check */}
       <div className="check-circle">
         <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
@@ -91,10 +92,9 @@ function ConfirmacaoConteudo() {
       {/* Botão novo pedido (aparece após 8s) */}
       {mostrarBotao && (
         <button
-          onClick={() => router.push("/")}
+          onClick={() => { playClick(); router.push("/"); }}
           className="fade-in bg-cb-amber text-cb-espresso font-bold font-sans text-xl
-                     py-5 px-12 rounded-full touch-manipulation active:scale-95 transition-transform
-                     min-h-[72px]"
+                     py-5 px-12 rounded-full touch-manipulation btn-totem min-h-[72px]"
         >
           Fazer Novo Pedido
         </button>

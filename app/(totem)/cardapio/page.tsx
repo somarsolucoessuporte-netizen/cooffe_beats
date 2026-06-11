@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
+import { playClick } from "@/lib/sounds";
 
 interface Categoria {
   id: string;
@@ -54,7 +55,7 @@ export default function Cardapio() {
   }, [categoriaAtiva, empresaId]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col animate-fadeIn">
       <HeaderTotem />
 
       {/* Chips de categorias */}
@@ -62,10 +63,10 @@ export default function Cardapio() {
         {categorias.map((cat) => (
           <button
             key={cat.id}
-            onClick={() => setCategoriaAtiva(cat.id)}
+            onClick={() => { playClick(); setCategoriaAtiva(cat.id); }}
             className={`
               flex items-center gap-1.5 px-4 py-2 rounded-full whitespace-nowrap
-              font-sans font-semibold text-sm touch-manipulation
+              font-sans font-semibold text-sm touch-manipulation btn-totem
               transition-all active:scale-95
               ${
                 categoriaAtiva === cat.id
@@ -94,9 +95,10 @@ export default function Cardapio() {
               <Link
                 key={produto.id}
                 href={`/produto/${produto.id}`}
+                onClick={() => playClick()}
                 className="bg-[#1e0f02] border border-[#3D1F00] rounded-2xl overflow-hidden
-                           touch-manipulation active:scale-95 transition-all
-                           hover:shadow-lg hover:shadow-amber-900/40 flex flex-col"
+                           touch-manipulation active:scale-95 btn-totem
+                           flex flex-col"
               >
                 {/* Foto */}
                 <div className="relative w-full aspect-[4/3] max-h-[200px] overflow-hidden bg-gradient-to-br from-[#2a1200] to-[#3D1F00]">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { playClick } from "@/lib/sounds";
 
 export default function Home() {
   const router = useRouter();
@@ -17,13 +18,11 @@ export default function Home() {
     <div
       className={`h-screen w-screen flex flex-col items-center justify-center select-none transition-opacity duration-700 ${visible ? "opacity-100" : "opacity-0"}`}
       style={{ background: "#1A0A00" }}
-      onClick={() => router.push("/cardapio")}
+      onClick={() => { playClick(); router.push("/cardapio"); }}
     >
-      <div className="flex flex-col items-center gap-8 px-8 text-center">
-        {/* Ícone */}
+      <div className="flex flex-col items-center gap-8 px-8 text-center animate-fadeIn">
         <div className="text-8xl">☕</div>
 
-        {/* Nome e slogan */}
         <div className="flex flex-col gap-3">
           <h1 className="font-display text-6xl font-bold text-amber-400 tracking-wide">
             Coffee & Beats
@@ -33,15 +32,15 @@ export default function Home() {
           </p>
         </div>
 
-        {/* CTA */}
         <button
           onClick={(e) => {
             e.stopPropagation();
+            playClick();
             router.push("/cardapio");
           }}
           className="mt-4 bg-amber-500 text-stone-900 font-bold font-sans text-2xl
-                     py-6 px-16 rounded-full transition-transform active:scale-95
-                     hover:bg-amber-400 min-h-[80px] touch-manipulation"
+                     py-6 px-16 rounded-full hover:bg-amber-400 min-h-[80px]
+                     touch-manipulation btn-totem cta-pulse"
         >
           FAZER PEDIDO
         </button>

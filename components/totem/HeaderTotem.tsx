@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
+import { playClick } from "@/lib/sounds";
 
 interface HeaderTotemProps {
   mostrarVoltar?: boolean;
@@ -17,8 +18,8 @@ export default function HeaderTotem({ mostrarVoltar = true }: HeaderTotemProps) 
       <div className="flex items-center gap-3">
         {mostrarVoltar && (
           <button
-            onClick={() => router.back()}
-            className="flex items-center justify-center w-9 h-9 rounded-full bg-cb-mocha text-cb-cream text-lg touch-manipulation active:scale-90 transition-transform"
+            onClick={() => { playClick(); router.back(); }}
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-cb-mocha text-cb-cream text-lg touch-manipulation btn-totem"
           >
             ←
           </button>
@@ -31,8 +32,8 @@ export default function HeaderTotem({ mostrarVoltar = true }: HeaderTotemProps) 
 
       {/* Indicador de carrinho */}
       <button
-        onClick={() => router.push("/carrinho")}
-        className="relative flex items-center gap-2 bg-cb-mocha px-3 py-2 rounded-xl touch-manipulation active:scale-95 transition-transform"
+        onClick={() => { playClick(); router.push("/carrinho"); }}
+        className="relative flex items-center gap-2 bg-cb-mocha px-3 py-2 rounded-xl touch-manipulation btn-totem"
       >
         <span className="text-lg">🛒</span>
         <span className="font-sans text-cb-cream font-medium text-sm">Carrinho</span>

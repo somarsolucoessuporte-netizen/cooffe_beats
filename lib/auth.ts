@@ -52,7 +52,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/painel/login",
+    signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
 };

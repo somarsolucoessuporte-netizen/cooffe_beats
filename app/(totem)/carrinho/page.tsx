@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { playClick } from "@/lib/sounds";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
@@ -23,16 +24,16 @@ export default function Carrinho() {
 
   if (itens.length === 0) {
     return (
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col animate-fadeIn">
         <HeaderTotem />
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
           <span className="text-8xl">🛒</span>
           <p className="font-display text-2xl text-cb-cream">Seu carrinho está vazio</p>
           <p className="font-sans text-cb-latte text-lg">Adicione produtos para continuar</p>
           <button
-            onClick={() => router.push("/cardapio")}
+            onClick={() => { playClick(); router.push("/cardapio"); }}
             className="bg-cb-amber text-cb-espresso font-bold text-lg px-10 py-5 rounded-full
-                       touch-manipulation active:scale-95 transition-transform min-h-[72px]"
+                       touch-manipulation btn-totem min-h-[72px]"
           >
             Ver Cardápio
           </button>
@@ -42,7 +43,7 @@ export default function Carrinho() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col animate-fadeIn">
       <HeaderTotem />
 
       <div className="flex-1 overflow-y-auto totem-scroll p-6 flex flex-col gap-4">
@@ -80,9 +81,9 @@ export default function Carrinho() {
               {/* Quantidade */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => alterarQuantidade(index, item.quantidade - 1)}
+                  onClick={() => { playClick(); alterarQuantidade(index, item.quantidade - 1); }}
                   className="w-10 h-10 rounded-full bg-cb-espresso text-cb-cream font-bold text-lg
-                             touch-manipulation active:scale-90 transition-transform"
+                             touch-manipulation btn-totem"
                 >
                   −
                 </button>
@@ -90,9 +91,9 @@ export default function Carrinho() {
                   {item.quantidade}
                 </span>
                 <button
-                  onClick={() => alterarQuantidade(index, item.quantidade + 1)}
+                  onClick={() => { playClick(); alterarQuantidade(index, item.quantidade + 1); }}
                   className="w-10 h-10 rounded-full bg-cb-amber text-cb-espresso font-bold text-lg
-                             touch-manipulation active:scale-90 transition-transform"
+                             touch-manipulation btn-totem"
                 >
                   +
                 </button>
@@ -153,16 +154,16 @@ export default function Carrinho() {
         </div>
         <div className="flex gap-4">
           <button
-            onClick={() => router.push("/cardapio")}
+            onClick={() => { playClick(); router.push("/cardapio"); }}
             className="flex-1 border-2 border-cb-amber text-cb-amber font-bold font-sans text-lg
-                       py-4 rounded-full touch-manipulation active:scale-95 transition-transform min-h-[64px]"
+                       py-4 rounded-full touch-manipulation btn-totem min-h-[64px]"
           >
             + Itens
           </button>
           <button
-            onClick={() => router.push("/pagamento")}
+            onClick={() => { playClick(); router.push("/pagamento"); }}
             className="flex-[2] bg-cb-amber text-cb-espresso font-bold font-sans text-lg
-                       py-4 rounded-full touch-manipulation active:scale-95 transition-transform min-h-[64px]"
+                       py-4 rounded-full touch-manipulation btn-totem min-h-[64px]"
           >
             Ir para Pagamento
           </button>

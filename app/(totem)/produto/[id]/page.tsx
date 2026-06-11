@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
+import { playClick } from "@/lib/sounds";
 
 interface Adicional {
   id: string;
@@ -107,7 +108,7 @@ export default function Detalheproduto() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col animate-fadeIn">
       <HeaderTotem />
 
       {/* Conteúdo com scroll */}
@@ -144,7 +145,7 @@ export default function Detalheproduto() {
                   return (
                     <button
                       key={adicional.id}
-                      onClick={() => toggleAdicional(adicional.id)}
+                      onClick={() => { playClick(); toggleAdicional(adicional.id); }}
                       className={`
                         flex items-center justify-between px-5 py-4 rounded-2xl
                         border-2 touch-manipulation transition-all active:scale-95 min-h-[64px]
@@ -196,9 +197,9 @@ export default function Detalheproduto() {
         {/* Controle de quantidade */}
         <div className="flex items-center gap-3 bg-cb-mocha rounded-full px-2 py-1">
           <button
-            onClick={() => setQuantidade((q) => Math.max(1, q - 1))}
+            onClick={() => { playClick(); setQuantidade((q) => Math.max(1, q - 1)); }}
             className="w-12 h-12 rounded-full bg-cb-espresso text-cb-cream font-bold text-xl
-                       touch-manipulation active:scale-90 transition-transform"
+                       touch-manipulation btn-totem"
           >
             −
           </button>
@@ -206,9 +207,9 @@ export default function Detalheproduto() {
             {quantidade}
           </span>
           <button
-            onClick={() => setQuantidade((q) => q + 1)}
+            onClick={() => { playClick(); setQuantidade((q) => q + 1); }}
             className="w-12 h-12 rounded-full bg-cb-amber text-cb-espresso font-bold text-xl
-                       touch-manipulation active:scale-90 transition-transform"
+                       touch-manipulation btn-totem"
           >
             +
           </button>
@@ -216,10 +217,9 @@ export default function Detalheproduto() {
 
         {/* Botão adicionar */}
         <button
-          onClick={adicionarAoCarrinho}
+          onClick={() => { playClick(); adicionarAoCarrinho(); }}
           className="flex-1 bg-cb-amber text-cb-espresso font-bold font-sans text-lg
-                     py-4 rounded-full touch-manipulation active:scale-95 transition-transform
-                     min-h-[64px]"
+                     py-4 rounded-full touch-manipulation btn-totem min-h-[64px]"
         >
           Adicionar — {formatarMoeda(precoTotal)}
         </button>

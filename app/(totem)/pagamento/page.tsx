@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback } from "react";
+import { playClick } from "@/lib/sounds";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
@@ -63,7 +64,7 @@ export default function Pagamento() {
   }, [processando, itens, empresaId, totalValor, limparCarrinho, router]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col animate-fadeIn">
       <HeaderTotem />
 
       <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
@@ -117,11 +118,11 @@ export default function Pagamento() {
           {/* Simulado — apenas em dev */}
           {pagamentoSimuladoAtivo && (
             <button
-              onClick={processarPagamento}
+              onClick={() => { playClick(); processarPagamento(); }}
               disabled={processando}
               className="flex flex-col items-center gap-3 bg-cb-amber text-cb-espresso
-                         rounded-2xl p-6 min-h-[130px] touch-manipulation active:scale-95
-                         transition-transform font-bold disabled:opacity-70"
+                         rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem
+                         font-bold disabled:opacity-70"
             >
               {processando ? (
                 <>
