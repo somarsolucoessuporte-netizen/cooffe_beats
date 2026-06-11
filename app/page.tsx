@@ -27,18 +27,16 @@ export default function Home() {
   const [fase, setFase] = useState(0);
   const [logoError, setLogoError] = useState(false);
   const [hora, setHora] = useState("");
+  const [tocando, setTocando] = useState(false);
 
-  const audioRef     = useRef<HTMLAudioElement | null>(null);
-  const musicaIniciada = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Prepara áudio na montagem (sem tocar ainda)
   useEffect(() => {
     const musica = MUSICAS[Math.floor(Math.random() * MUSICAS.length)];
     const audio  = new Audio(musica);
     audio.volume = 0;
     audio.loop   = true;
     audioRef.current = audio;
-
     return () => {
       audioRef.current?.pause();
       audioRef.current = null;
@@ -61,45 +59,44 @@ export default function Home() {
     };
   }, [router]);
 
-  const iniciarMusica = () => {
-    if (musicaIniciada.current || !audioRef.current) return;
-    musicaIniciada.current = true;
-    audioRef.current.play().catch(() => {});
-    let vol = 0;
-    const fadeIn = setInterval(() => {
-      vol = Math.min(vol + 0.03, 0.3);
-      if (audioRef.current) audioRef.current.volume = vol;
-      if (vol >= 0.3) clearInterval(fadeIn);
-    }, 200);
+  // Inicia áudio diretamente no gesto do usuário (requisito do browser)
+  const iniciarAudio = () => {
+    const audio = audioRef.current;
+    if (!audio || tocando) return;
+    audio.play().then(() => {
+      setTocando(true);
+      let vol = 0;
+      const fadeIn = setInterval(() => {
+        vol = Math.min(vol + 0.03, 0.3);
+        if (audio) audio.volume = vol;
+        if (vol >= 0.3) clearInterval(fadeIn);
+      }, 200);
+    }).catch(() => {});
   };
 
-  const irParaCardapio = () => {
+  const irParaCardapio = (e: React.MouseEvent) => {
+    e.stopPropagation();
     playClick();
-    if (audioRef.current && musicaIniciada.current) {
-      let vol = audioRef.current.volume;
+    const audio = audioRef.current;
+    if (audio && tocando) {
+      let vol = audio.volume;
       const fadeOut = setInterval(() => {
         vol = Math.max(vol - 0.05, 0);
-        if (audioRef.current) audioRef.current.volume = vol;
+        if (audio) audio.volume = vol;
         if (vol <= 0) {
           clearInterval(fadeOut);
-          audioRef.current?.pause();
+          audio.pause();
         }
       }, 100);
     }
-    setTimeout(() => router.push("/cardapio"), 800);
-  };
-
-  const handleTapFundo = () => {
-    playClick();
-    iniciarMusica();
-    router.push("/cardapio");
+    setTimeout(() => router.push("/cardapio"), 600);
   };
 
   return (
     <div
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
       style={{ background: "#F6F0E5" }}
-      onClick={handleTapFundo}
+      onClick={iniciarAudio}
     >
       {/* Partículas de fundo */}
       {PARTICLES.map((p, i) => (
@@ -145,11 +142,7 @@ export default function Home() {
         {fase >= 3 && (
           <div className="slide-up flex flex-col items-center gap-4">
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                iniciarMusica();
-                irParaCardapio();
-              }}
+              onClick={irParaCardapio}
               className="mt-2 bg-cb-marrom text-cb-bege font-extrabold font-sans text-2xl
                          py-6 px-16 rounded-full min-h-[80px]
                          touch-manipulation btn-totem cta-pulse"
@@ -167,6 +160,12 @@ export default function Home() {
           {hora}
         </div>
       )}
+
+      {/* Indicador de áudio */}
+      <div className="absolute bottom-6 left-8 text-xl select-none pointer-events-none"
+           style={{ opacity: 0.4 }}>
+        {tocando ? "🔊" : "🔇"}
+      </div>
     </div>
   );
 }
