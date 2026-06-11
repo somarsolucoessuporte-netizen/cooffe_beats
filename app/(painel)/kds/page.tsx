@@ -98,12 +98,17 @@ export default function KDS() {
 
   return (
     <div className="h-full flex flex-col bg-zinc-950">
-      <div className="px-8 py-4 border-b border-zinc-800 flex items-center justify-between">
+      <div className="px-8 py-4 border-b border-white/10 flex items-center justify-between"
+           style={{ background: "#3B2415" }}>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">KDS — Barista</h1>
-          <p className="text-zinc-400 text-sm">{pedidos.length} pedido(s) em aberto</p>
+          <h1 className="text-2xl font-extrabold" style={{ color: "#F6F0E5" }}>KDS — Barista</h1>
+          <p className="text-sm" style={{ color: "rgba(246,240,229,0.6)" }}>
+            {pedidos.length} pedido(s) em aberto
+          </p>
         </div>
-        <div className="text-zinc-500 text-sm font-mono">{new Date().toLocaleTimeString("pt-BR")}</div>
+        <div className="text-sm font-mono" style={{ color: "#C8853A" }}>
+          {new Date().toLocaleTimeString("pt-BR")}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
@@ -169,7 +174,8 @@ export default function KDS() {
                   {pedido.status === "RECEBIDO" && (
                     <button
                       onClick={() => atualizarStatus(pedido.id, "EM_PREPARO")}
-                      className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-colors text-lg"
+                      className="flex-1 font-extrabold py-3 rounded-xl transition-opacity hover:opacity-90 text-lg"
+                      style={{ background: "#C8853A", color: "#3B2415" }}
                     >
                       INICIAR
                     </button>

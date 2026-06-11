@@ -143,18 +143,19 @@ export default function AdminProdutos() {
   };
 
   const inputClass =
-    "w-full bg-white border border-zinc-300 rounded-xl px-4 py-2.5 text-zinc-900 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-200";
+    "w-full bg-white border border-zinc-200 rounded-xl px-4 py-2.5 text-zinc-900 text-sm focus:outline-none focus:border-[#3B2415] focus:ring-1 focus:ring-[#3B2415]/10";
 
   return (
     <div className="p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Produtos</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">{produtos.length} cadastrados</p>
+          <h1 className="text-2xl font-extrabold text-[#3B2415]">Produtos</h1>
+          <p className="text-[#3B2415]/60 text-sm mt-0.5">{produtos.length} cadastrados</p>
         </div>
         <button
           onClick={abrirCriar}
-          className="bg-amber-500 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-amber-600 transition-colors text-sm shadow-sm"
+          className="font-bold px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm hover:opacity-90"
+          style={{ background: "#3B2415", color: "#F6F0E5" }}
         >
           + Novo Produto
         </button>
@@ -182,7 +183,7 @@ export default function AdminProdutos() {
               {["Produto", "Categoria", "Preço", "Destaque", "Disponível", ""].map((h) => (
                 <th
                   key={h}
-                  className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide"
+                  className="text-left px-4 py-3 text-xs font-semibold text-[#3B2415]/60 uppercase tracking-wide"
                 >
                   {h}
                 </th>
@@ -428,7 +429,8 @@ export default function AdminProdutos() {
               <button
                 onClick={salvar}
                 disabled={salvando}
-                className="bg-amber-500 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-amber-600 transition-colors text-sm disabled:opacity-50 shadow-sm"
+                className="font-bold px-6 py-2.5 rounded-xl text-sm disabled:opacity-50 shadow-sm hover:opacity-90 transition-opacity"
+                style={{ background: "#3B2415", color: "#F6F0E5" }}
               >
                 {salvando ? "Salvando..." : editandoId ? "Salvar Alterações" : "Criar Produto"}
               </button>

@@ -17,11 +17,7 @@ export default function Login() {
       setCarregando(true);
       setErro(null);
 
-      const result = await signIn("credentials", {
-        email,
-        senha,
-        redirect: false,
-      });
+      const result = await signIn("credentials", { email, senha, redirect: false });
 
       if (result?.error) {
         setErro("Email ou senha incorretos");
@@ -34,46 +30,62 @@ export default function Login() {
   );
 
   return (
-    <div className="h-full flex items-center justify-center bg-zinc-950">
-      <div className="w-full max-w-md px-6">
+    <div className="h-full flex items-center justify-center" style={{ background: "#F6F0E5" }}>
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-lg px-8 py-10">
         {/* Logo */}
-        <div className="text-center mb-10">
-          <div className="text-5xl mb-3">☕</div>
-          <h1 className="font-display text-3xl font-bold text-cb-amber">Coffee & Beats</h1>
-          <p className="text-zinc-400 mt-2">Painel Operacional</p>
+        <div className="flex flex-col items-center mb-8">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Coffee & Beats" className="w-40 object-contain mb-4" />
+          <p className="font-extrabold text-xl" style={{ color: "#3B2415" }}>
+            Painel Operacional
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Email</label>
+            <label className="block text-sm font-semibold mb-2" style={{ color: "rgba(59,36,21,0.7)" }}>
+              Email
+            </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="admin@coffeeandbeats.com"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3
-                         text-zinc-100 font-sans placeholder:text-zinc-600
-                         focus:outline-none focus:border-cb-amber transition-colors"
+              className="w-full bg-white rounded-xl px-4 py-3 font-sans text-sm
+                         focus:outline-none transition-colors"
+              style={{
+                border: "1px solid rgba(59,36,21,0.2)",
+                color: "#3B2415",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#3B2415")}
+              onBlur={(e) => (e.target.style.borderColor = "rgba(59,36,21,0.2)")}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Senha</label>
+            <label className="block text-sm font-semibold mb-2" style={{ color: "rgba(59,36,21,0.7)" }}>
+              Senha
+            </label>
             <input
               type="password"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               required
               placeholder="••••••••"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3
-                         text-zinc-100 font-sans placeholder:text-zinc-600
-                         focus:outline-none focus:border-cb-amber transition-colors"
+              className="w-full bg-white rounded-xl px-4 py-3 font-sans text-sm
+                         focus:outline-none transition-colors"
+              style={{
+                border: "1px solid rgba(59,36,21,0.2)",
+                color: "#3B2415",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#3B2415")}
+              onBlur={(e) => (e.target.style.borderColor = "rgba(59,36,21,0.2)")}
             />
           </div>
 
           {erro && (
-            <div className="bg-red-900/30 border border-red-700 rounded-xl px-4 py-3 text-red-400 text-sm">
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">
               {erro}
             </div>
           )}
@@ -81,8 +93,9 @@ export default function Login() {
           <button
             type="submit"
             disabled={carregando}
-            className="w-full bg-cb-amber text-cb-espresso font-bold font-sans text-lg
-                       py-4 rounded-xl transition-opacity disabled:opacity-60 mt-2"
+            className="w-full font-bold font-sans text-lg py-4 rounded-xl
+                       transition-opacity disabled:opacity-60 mt-2 hover:opacity-90"
+            style={{ background: "#3B2415", color: "#F6F0E5" }}
           >
             {carregando ? "Entrando..." : "Entrar"}
           </button>
