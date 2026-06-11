@@ -123,7 +123,10 @@ export default function Home() {
             <img
               src="/logo.png"
               alt="Coffee & Beats"
-              className={`w-44 h-44 object-contain ${fase >= 2 ? "logo-pulse" : "logo-reveal"}`}
+              width={200}
+              height={200}
+              style={{ objectFit: "contain" }}
+              className={`w-48 h-48 ${fase >= 2 ? "logo-pulse" : "logo-reveal"}`}
               onError={() => setLogoError(true)}
             />
           ) : (
