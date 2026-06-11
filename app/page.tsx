@@ -39,20 +39,16 @@ export default function Home() {
             src="/logo.png"
             alt="Coffee & Beats"
             className="w-44 h-44 object-contain"
+            style={{ filter: "sepia(1) saturate(5) hue-rotate(5deg) brightness(0.9)" }}
             onError={() => setLogoError(true)}
           />
         ) : (
           <span className="text-8xl">☕</span>
         )}
 
-        <div className="flex flex-col gap-3">
-          <h1 className="font-display text-6xl font-bold text-amber-400 tracking-wide">
-            Coffee & Beats
-          </h1>
-          <p className="text-xl text-amber-100/70">
-            Onde o café encontra o ritmo da sua vida
-          </p>
-        </div>
+        <p className="text-xl text-amber-100/70">
+          Onde o café encontra o ritmo da sua vida
+        </p>
 
         <button
           onClick={(e) => {
