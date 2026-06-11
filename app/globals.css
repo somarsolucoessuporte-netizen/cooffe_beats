@@ -126,8 +126,8 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes glow {
-  0%, 100% { filter: brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(5deg) drop-shadow(0 0 8px rgba(200,133,58,0.4)); }
-  50%       { filter: brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(5deg) drop-shadow(0 0 20px rgba(200,133,58,0.8)); }
+  0%, 100% { filter: brightness(0) saturate(100%) drop-shadow(0 0 8px rgba(120,53,15,0.4)); }
+  50%       { filter: brightness(0) saturate(100%) drop-shadow(0 0 20px rgba(120,53,15,0.7)); }
 }
 @keyframes float {
   0%, 100% { transform: translateY(0) translateX(0); }

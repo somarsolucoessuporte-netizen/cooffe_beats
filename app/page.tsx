@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { playClick } from "@/lib/sounds";
 
-const LOGO_FILTER =
-  "brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(5deg) brightness(95%)";
+const LOGO_FILTER = "brightness(0) saturate(100%)";
 
 const PARTICLES = [
   { top: "12%", left: "8%",  size: 6, dur: "9s",  delay: "0s" },
@@ -44,7 +43,7 @@ export default function Home() {
   return (
     <div
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
-      style={{ background: "#1A0A00" }}
+      style={{ background: "linear-gradient(135deg, #f59e0b, #b45309)" }}
       onClick={() => { playClick(); router.push("/cardapio"); }}
     >
       {/* Partículas de fundo */}
@@ -57,7 +56,7 @@ export default function Home() {
             left: p.left,
             width: p.size,
             height: p.size,
-            background: "rgba(200,133,58,0.18)",
+            background: "rgba(120,53,15,0.30)",
             "--dur": p.dur,
             "--delay": p.delay,
           } as React.CSSProperties}
@@ -83,7 +82,7 @@ export default function Home() {
 
         {/* Fase 2 — Slogan */}
         {fase >= 2 && (
-          <p className="slide-up text-xl text-amber-100/70">
+          <p className="slide-up text-xl text-amber-950">
             Onde o café encontra o ritmo da sua vida
           </p>
         )}
@@ -97,20 +96,20 @@ export default function Home() {
                 playClick();
                 router.push("/cardapio");
               }}
-              className="mt-2 bg-amber-500 text-stone-900 font-bold font-sans text-2xl
-                         py-6 px-16 rounded-full hover:bg-amber-400 min-h-[80px]
+              className="mt-2 bg-amber-950 text-amber-400 font-bold font-sans text-2xl
+                         py-6 px-16 rounded-full hover:bg-amber-900 min-h-[80px]
                          touch-manipulation btn-totem cta-pulse"
             >
               FAZER PEDIDO
             </button>
-            <p className="text-amber-900/60 text-sm">Toque em qualquer lugar para começar</p>
+            <p className="text-amber-900/70 text-sm">Toque em qualquer lugar para começar</p>
           </div>
         )}
       </div>
 
       {/* Relógio */}
       {hora && (
-        <div className="absolute bottom-6 right-8 font-mono text-sm text-amber-900/50 select-none">
+        <div className="absolute bottom-6 right-8 font-mono text-sm text-amber-900 select-none">
           {hora}
         </div>
       )}
