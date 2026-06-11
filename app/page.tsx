@@ -4,18 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { playClick } from "@/lib/sounds";
 
-const LOGO_FILTER = "brightness(0) saturate(100%)";
-
 const PARTICLES = [
-  { top: "12%", left: "8%",  size: 6, dur: "9s",  delay: "0s" },
-  { top: "25%", left: "88%", size: 4, dur: "7s",  delay: "1.2s" },
-  { top: "55%", left: "5%",  size: 5, dur: "11s", delay: "2.5s" },
-  { top: "70%", left: "92%", size: 7, dur: "8s",  delay: "0.7s" },
-  { top: "80%", left: "20%", size: 4, dur: "12s", delay: "3s" },
-  { top: "15%", left: "50%", size: 5, dur: "10s", delay: "1.8s" },
-  { top: "45%", left: "95%", size: 6, dur: "9s",  delay: "4s" },
-  { top: "90%", left: "60%", size: 4, dur: "13s", delay: "0.5s" },
-  { top: "35%", left: "3%",  size: 5, dur: "7.5s",delay: "2s" },
+  { top: "12%", left: "8%",  size: 6, dur: "9s",   delay: "0s" },
+  { top: "25%", left: "88%", size: 4, dur: "7s",   delay: "1.2s" },
+  { top: "55%", left: "5%",  size: 5, dur: "11s",  delay: "2.5s" },
+  { top: "70%", left: "92%", size: 7, dur: "8s",   delay: "0.7s" },
+  { top: "80%", left: "20%", size: 4, dur: "12s",  delay: "3s" },
+  { top: "15%", left: "50%", size: 5, dur: "10s",  delay: "1.8s" },
+  { top: "45%", left: "95%", size: 6, dur: "9s",   delay: "4s" },
+  { top: "90%", left: "60%", size: 4, dur: "13s",  delay: "0.5s" },
+  { top: "35%", left: "3%",  size: 5, dur: "7.5s", delay: "2s" },
 ];
 
 export default function Home() {
@@ -43,7 +41,7 @@ export default function Home() {
   return (
     <div
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #f59e0b, #b45309)" }}
+      style={{ background: "linear-gradient(135deg, #F5EDD6 0%, #EDE0C4 50%, #E8D5B0 100%)" }}
       onClick={() => { playClick(); router.push("/cardapio"); }}
     >
       {/* Partículas de fundo */}
@@ -56,7 +54,7 @@ export default function Home() {
             left: p.left,
             width: p.size,
             height: p.size,
-            background: "rgba(120,53,15,0.30)",
+            background: "rgba(146,64,14,0.20)",
             "--dur": p.dur,
             "--delay": p.delay,
           } as React.CSSProperties}
@@ -64,25 +62,24 @@ export default function Home() {
       ))}
 
       <div className="flex flex-col items-center gap-8 px-8 text-center">
-        {/* Fase 1 — Logo */}
+        {/* Fase 1 — Logo (sem filter, cores originais) */}
         {fase >= 1 && (
           !logoError ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src="/logo.png"
               alt="Coffee & Beats"
-              className={`w-44 h-44 object-contain ${fase >= 2 ? "logo-glow" : "logo-entrance"}`}
-              style={{ filter: fase >= 2 ? undefined : LOGO_FILTER }}
+              className={`w-44 h-44 object-contain ${fase >= 2 ? "logo-pulse" : "logo-reveal"}`}
               onError={() => setLogoError(true)}
             />
           ) : (
-            <span className="logo-entrance text-8xl">☕</span>
+            <span className="logo-reveal text-8xl">☕</span>
           )
         )}
 
         {/* Fase 2 — Slogan */}
         {fase >= 2 && (
-          <p className="slide-up text-xl text-amber-950">
+          <p className="slide-up text-xl text-amber-800/80">
             Onde o café encontra o ritmo da sua vida
           </p>
         )}
@@ -96,20 +93,20 @@ export default function Home() {
                 playClick();
                 router.push("/cardapio");
               }}
-              className="mt-2 bg-amber-950 text-amber-400 font-bold font-sans text-2xl
-                         py-6 px-16 rounded-full hover:bg-amber-900 min-h-[80px]
+              className="mt-2 bg-amber-900 text-amber-400 font-bold font-sans text-2xl
+                         py-6 px-16 rounded-full hover:bg-amber-800 min-h-[80px]
                          touch-manipulation btn-totem cta-pulse"
             >
               FAZER PEDIDO
             </button>
-            <p className="text-amber-900/70 text-sm">Toque em qualquer lugar para começar</p>
+            <p className="text-amber-700/60 text-sm">Toque em qualquer lugar para começar</p>
           </div>
         )}
       </div>
 
       {/* Relógio */}
       {hora && (
-        <div className="absolute bottom-6 right-8 font-mono text-sm text-amber-900 select-none">
+        <div className="absolute bottom-6 right-8 font-mono text-sm text-amber-800/50 select-none">
           {hora}
         </div>
       )}

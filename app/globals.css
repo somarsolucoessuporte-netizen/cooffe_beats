@@ -117,24 +117,25 @@ body {
 }
 
 /* Tela inicial — animações de abertura */
-@keyframes logoEntrance {
-  from { opacity: 0; transform: scale(0.8); }
-  to   { opacity: 1; transform: scale(1); }
+@keyframes logoReveal {
+  0%   { opacity: 0; transform: scale(0.85) translateY(10px); }
+  60%  { opacity: 1; transform: scale(1.03) translateY(-3px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes logoPulse {
+  0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 0px rgba(139,90,43,0)); }
+  50%       { transform: scale(1.02); filter: drop-shadow(0 4px 20px rgba(139,90,43,0.3)); }
 }
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes glow {
-  0%, 100% { filter: brightness(0) saturate(100%) drop-shadow(0 0 8px rgba(120,53,15,0.4)); }
-  50%       { filter: brightness(0) saturate(100%) drop-shadow(0 0 20px rgba(120,53,15,0.7)); }
 }
 @keyframes float {
   0%, 100% { transform: translateY(0) translateX(0); }
   33%       { transform: translateY(-18px) translateX(8px); }
   66%       { transform: translateY(10px) translateX(-6px); }
 }
-.logo-entrance { animation: logoEntrance 1s cubic-bezier(0.34,1.56,0.64,1) forwards; }
-.logo-glow     { animation: glow 3s ease-in-out infinite; }
-.slide-up      { animation: slideUp 0.8s ease forwards; }
-.particle      { animation: float var(--dur, 8s) ease-in-out infinite var(--delay, 0s); }
+.logo-reveal { animation: logoReveal 1.2s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.logo-pulse  { animation: logoPulse 4s ease-in-out infinite; }
+.slide-up    { animation: slideUp 0.8s ease forwards; }
+.particle    { animation: float var(--dur, 8s) ease-in-out infinite var(--delay, 0s); }
