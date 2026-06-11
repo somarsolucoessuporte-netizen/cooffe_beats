@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { playClick } from "@/lib/sounds";
+
+const MUSICAS = [
+  "/nastelbom-deep-house-351574.mp3",
+  "/jyproject-silent-echoes_1_bip-405296.mp3",
+  "/the_mountain-relaxed-house-159130.mp3",
+];
 
 const PARTICLES = [
   { top: "12%", left: "8%",  size: 6, dur: "9s",   delay: "0s" },
@@ -22,6 +28,23 @@ export default function Home() {
   const [logoError, setLogoError] = useState(false);
   const [hora, setHora] = useState("");
 
+  const audioRef     = useRef<HTMLAudioElement | null>(null);
+  const musicaIniciada = useRef(false);
+
+  // Prepara áudio na montagem (sem tocar ainda)
+  useEffect(() => {
+    const musica = MUSICAS[Math.floor(Math.random() * MUSICAS.length)];
+    const audio  = new Audio(musica);
+    audio.volume = 0;
+    audio.loop   = true;
+    audioRef.current = audio;
+
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     setHora(new Date().toLocaleTimeString("pt-BR"));
     const clock    = setInterval(() => setHora(new Date().toLocaleTimeString("pt-BR")), 1_000);
@@ -38,11 +61,45 @@ export default function Home() {
     };
   }, [router]);
 
+  const iniciarMusica = () => {
+    if (musicaIniciada.current || !audioRef.current) return;
+    musicaIniciada.current = true;
+    audioRef.current.play().catch(() => {});
+    let vol = 0;
+    const fadeIn = setInterval(() => {
+      vol = Math.min(vol + 0.03, 0.3);
+      if (audioRef.current) audioRef.current.volume = vol;
+      if (vol >= 0.3) clearInterval(fadeIn);
+    }, 200);
+  };
+
+  const irParaCardapio = () => {
+    playClick();
+    if (audioRef.current && musicaIniciada.current) {
+      let vol = audioRef.current.volume;
+      const fadeOut = setInterval(() => {
+        vol = Math.max(vol - 0.05, 0);
+        if (audioRef.current) audioRef.current.volume = vol;
+        if (vol <= 0) {
+          clearInterval(fadeOut);
+          audioRef.current?.pause();
+        }
+      }, 100);
+    }
+    setTimeout(() => router.push("/cardapio"), 800);
+  };
+
+  const handleTapFundo = () => {
+    playClick();
+    iniciarMusica();
+    router.push("/cardapio");
+  };
+
   return (
     <div
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
       style={{ background: "#F6F0E5" }}
-      onClick={() => { playClick(); router.push("/cardapio"); }}
+      onClick={handleTapFundo}
     >
       {/* Partículas de fundo */}
       {PARTICLES.map((p, i) => (
@@ -62,7 +119,7 @@ export default function Home() {
       ))}
 
       <div className="flex flex-col items-center gap-8 px-8 text-center">
-        {/* Fase 1 — Logo (sem filter, cores originais) */}
+        {/* Fase 1 — Logo */}
         {fase >= 1 && (
           !logoError ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -90,8 +147,8 @@ export default function Home() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                playClick();
-                router.push("/cardapio");
+                iniciarMusica();
+                irParaCardapio();
               }}
               className="mt-2 bg-cb-marrom text-cb-bege font-extrabold font-sans text-2xl
                          py-6 px-16 rounded-full min-h-[80px]
