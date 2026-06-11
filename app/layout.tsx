@@ -33,6 +33,13 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${inter.variable} ${playfairDisplay.variable} ${jetbrainsMono.variable} h-full`}
     >
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#C8853A" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Coffee & Beats" />
+      </head>
       <body className="h-full antialiased">{children}</body>
     </html>
   );
