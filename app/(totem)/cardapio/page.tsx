@@ -31,7 +31,6 @@ export default function Cardapio() {
   const [categoriaAtiva, setCategoriaAtiva] = useState<string>("");
   const [carregando, setCarregando] = useState(true);
 
-  // Busca categorias ao montar
   useEffect(() => {
     if (!empresaId) return;
     fetch(`/api/categorias?empresaId=${empresaId}`)
@@ -44,7 +43,6 @@ export default function Cardapio() {
       });
   }, [empresaId]);
 
-  // Busca produtos quando categoria muda
   useEffect(() => {
     if (!categoriaAtiva || !empresaId) return;
     setCarregando(true);
@@ -66,7 +64,7 @@ export default function Cardapio() {
       <HeaderTotem />
 
       {/* Chips de categorias */}
-      <div className="flex gap-3 px-6 py-4 overflow-x-auto totem-scroll border-b border-cb-caramel/20 shrink-0">
+      <div className="flex gap-3 px-6 py-4 overflow-x-auto totem-scroll border-b border-amber-900/30 shrink-0">
         {categorias.map((cat) => (
           <button
             key={cat.id}
@@ -77,8 +75,8 @@ export default function Cardapio() {
               transition-all active:scale-95 min-h-[56px]
               ${
                 categoriaAtiva === cat.id
-                  ? "bg-cb-amber text-cb-espresso"
-                  : "bg-cb-mocha text-cb-cream border border-cb-caramel/30"
+                  ? "bg-amber-500 text-stone-900"
+                  : "bg-[#2a1200] text-amber-100/80 border border-amber-900/40"
               }
             `}
           >
@@ -89,25 +87,25 @@ export default function Cardapio() {
       </div>
 
       {/* Grid de produtos */}
-      <div className="flex-1 overflow-y-auto totem-scroll p-6">
+      <div className="flex-1 overflow-y-auto totem-scroll px-6 py-5">
         {carregando ? (
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-6">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-cb-mocha rounded-2xl h-72 animate-pulse" />
+              <div key={i} className="bg-[#1e0f02] rounded-3xl h-72 animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-6">
             {produtos.map((produto) => (
               <button
                 key={produto.id}
                 onClick={() => irParaProduto(produto.id)}
-                className="bg-cb-mocha border border-cb-caramel/30 rounded-2xl overflow-hidden
-                           text-left touch-manipulation active:scale-95 transition-transform
-                           flex flex-col"
+                className="bg-[#1e0f02] border border-[#3D1F00] rounded-3xl overflow-hidden
+                           text-left touch-manipulation active:scale-95 transition-all
+                           hover:shadow-lg hover:shadow-amber-900/50 flex flex-col"
               >
-                {/* Foto */}
-                <div className="relative w-full aspect-[4/3] bg-gradient-to-br from-cb-mocha to-cb-caramel">
+                {/* Foto — aspect 16/9 */}
+                <div className="relative w-full aspect-video bg-gradient-to-br from-[#2a1200] to-[#3D1F00]">
                   {produto.fotoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -117,11 +115,11 @@ export default function Cardapio() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <span className="text-5xl opacity-30">☕</span>
+                      <span className="text-5xl opacity-20">☕</span>
                     </div>
                   )}
                   {produto.destaque && (
-                    <span className="absolute top-2 left-2 bg-cb-amber text-cb-espresso font-bold text-xs px-3 py-1 rounded-full">
+                    <span className="absolute top-2 left-2 bg-amber-500 text-stone-900 font-bold text-xs px-3 py-1 rounded-full">
                       DESTAQUE
                     </span>
                   )}
@@ -129,17 +127,17 @@ export default function Cardapio() {
 
                 {/* Info */}
                 <div className="flex-1 p-4 flex flex-col gap-1">
-                  <p className="font-display text-lg text-cb-cream font-semibold leading-snug">
+                  <p className="text-xl font-bold text-amber-200 leading-snug">
                     {produto.nome}
                   </p>
-                  <p className="font-sans text-sm text-cb-latte line-clamp-2">
+                  <p className="text-sm text-amber-100/70 line-clamp-2">
                     {produto.descricao}
                   </p>
-                  <div className="flex items-center justify-between mt-auto pt-2">
-                    <span className="font-display text-xl text-cb-gold font-bold">
+                  <div className="flex items-center justify-between mt-auto pt-3">
+                    <span className="text-2xl font-bold text-amber-400">
                       {formatarMoeda(produto.preco)}
                     </span>
-                    <span className="bg-cb-amber text-cb-espresso rounded-full w-10 h-10 flex items-center justify-center font-bold text-xl">
+                    <span className="bg-amber-500 text-stone-900 rounded-full w-14 h-14 flex items-center justify-center font-bold text-2xl shrink-0">
                       +
                     </span>
                   </div>
