@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL     ?? ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+const SUPABASE_URL      = 'https://jasnnodtxmvudgwrqcpx.supabase.co'
+const SUPABASE_ANON_KEY = 'sb_publishable_-RKTgLdQ5HCrOmklgx30Zg_f8DvkPOB'
 
 export const supabase = createClient(
-  supabaseUrl     || 'https://jasnnodtxmvudgwrqcpx.supabase.co',
-  supabaseAnonKey || 'sb_publishable_-RKTgLdQ5HCrOmklgx30Zg_f8DvkPOB'
+  process.env.NEXT_PUBLIC_SUPABASE_URL      ?? SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? SUPABASE_ANON_KEY
 )
 
-// Nunca expor no browser — apenas API routes (server-side)
+// supabaseAdmin — server-side only (API routes)
 export const supabaseAdmin = createClient(
-  supabaseUrl || 'https://jasnnodtxmvudgwrqcpx.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  process.env.NEXT_PUBLIC_SUPABASE_URL   ?? SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY  ?? SUPABASE_ANON_KEY
 )
