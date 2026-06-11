@@ -1,0 +1,146 @@
+import { NextRequest } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { resposta, erroResposta } from "@/lib/api-response";
+import { supabaseAdmin } from "@/lib/supabase";
+
+const ItemSchema = z.object({
+  produtoId: z.string(),
+  quantidade: z.number().int().positive(),
+  precoUnit: z.number().positive(),
+  observacao: z.string().optional(),
+  adicionais: z
+    .array(
+      z.object({
+        adicionalId: z.string(),
+        preco: z.number(),
+      })
+    )
+    .optional(),
+});
+
+const CriarPedidoSchema = z.object({
+  empresaId: z.string(),
+  itens: z.array(ItemSchema).min(1),
+  observacao: z.string().optional(),
+});
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const validacao = CriarPedidoSchema.safeParse(body);
+
+    if (!validacao.success) {
+      return erroResposta(validacao.error.message);
+    }
+
+    const { empresaId, itens, observacao } = validacao.data;
+
+    const pedido = await prisma.$transaction(async (tx) => {
+      // Gerar senha sequencial
+      const config = await tx.configuracao.findUnique({
+        where: { empresaId },
+      });
+
+      if (!config) {
+        throw new Error("Configuração da empresa não encontrada");
+      }
+
+      const novaSenha = config.senhaAtual + 1;
+      await tx.configuracao.update({
+        where: { empresaId },
+        data: { senhaAtual: novaSenha },
+      });
+
+      const senha = `${config.prefixoSenha}-${novaSenha}`;
+
+      // Calcular totais
+      const subtotal = itens.reduce((acc, item) => {
+        const totalAdicionais = (item.adicionais ?? []).reduce(
+          (s, a) => s + a.preco,
+          0
+        );
+        return acc + (item.precoUnit + totalAdicionais) * item.quantidade;
+      }, 0);
+
+      // Criar pedido com itens
+      const novoPedido = await tx.pedido.create({
+        data: {
+          empresaId,
+          senha,
+          subtotal,
+          total: subtotal,
+          observacao,
+          itens: {
+            create: itens.map((item) => ({
+              produtoId: item.produtoId,
+              quantidade: item.quantidade,
+              precoUnit: item.precoUnit,
+              precoTotal: item.precoUnit * item.quantidade,
+              observacao: item.observacao,
+              adicionais: {
+                create: (item.adicionais ?? []).map((a) => ({
+                  adicionalId: a.adicionalId,
+                  preco: a.preco,
+                })),
+              },
+            })),
+          },
+        },
+        include: {
+          itens: {
+            include: {
+              produto: true,
+              adicionais: { include: { adicional: true } },
+            },
+          },
+        },
+      });
+
+      return novoPedido;
+    });
+
+    await supabaseAdmin.channel(`empresa-${empresaId}`).send({
+      type: "broadcast",
+      event: "pedido:novo",
+      payload: pedido,
+    });
+
+    return resposta(pedido, 201);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao criar pedido";
+    return erroResposta(msg, 500);
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const status = req.nextUrl.searchParams.get("status");
+  const empresaId = req.nextUrl.searchParams.get("empresaId");
+
+  if (!empresaId) {
+    return erroResposta("empresaId é obrigatório");
+  }
+
+  try {
+    const pedidos = await prisma.pedido.findMany({
+      where: {
+        empresaId,
+        ...(status ? { status: status as never } : {}),
+      },
+      include: {
+        itens: {
+          include: {
+            produto: true,
+            adicionais: { include: { adicional: true } },
+          },
+        },
+        pagamento: true,
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    return resposta(pedidos);
+  } catch {
+    return erroResposta("Erro ao buscar pedidos", 500);
+  }
+}

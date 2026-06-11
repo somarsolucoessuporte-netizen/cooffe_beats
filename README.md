@@ -1,36 +1,151 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Coffee & Beats — Sistema de Autoatendimento (Totem)
 
-## Getting Started
+PWA de autoatendimento para cafeteria, com totem touchscreen, painel operacional e KDS para barista.
 
-First, run the development server:
+## Stack
 
+- **Frontend/Backend**: Next.js 16 (App Router) + TypeScript
+- **Banco de dados**: PostgreSQL + Prisma ORM
+- **Tempo real**: Socket.IO (servidor standalone)
+- **Autenticação**: NextAuth v4
+- **Estilização**: Tailwind CSS v4
+- **PWA**: next-pwa
+
+## Pré-requisitos
+
+- Node.js 20.x
+- PostgreSQL 15+ (local ou Docker)
+- Docker (opcional, para Redis)
+
+## Setup Local
+
+### 1. Instalar dependências
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Banco de dados
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Opção A — PostgreSQL local (recomendado para dev):**
+```bash
+psql -U postgres -c "CREATE DATABASE coffee_beats;"
+psql -U postgres -c "CREATE USER cb_user WITH PASSWORD 'cb_senha_dev';"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE coffee_beats TO cb_user;"
+psql -U postgres -c "ALTER USER cb_user CREATEDB;"
+psql -U postgres -d coffee_beats -c "GRANT ALL ON SCHEMA public TO cb_user;"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Opção B — Docker:**
+```bash
+docker compose up -d postgres redis
+```
 
-## Learn More
+### 3. Configurar variáveis de ambiente
+```bash
+cp .env.example .env
+# Edite o .env conforme necessário
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Migrations e Seed
+```bash
+npm run db:migrate
+npm run db:seed
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+O seed exibirá o `NEXT_PUBLIC_EMPRESA_ID` — adicione-o no `.env`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 5. Iniciar
+```bash
+npm run dev
+```
 
-## Deploy on Vercel
+Acesse:
+- **Totem**: http://localhost:3000
+- **Painel**: http://localhost:3000/painel/login
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Credenciais de acesso:**
+- Admin: `admin@coffeeandbeats.com` / `admin123`
+- Barista: `barista@coffeeandbeats.com` / `barista123`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Estrutura de Rotas
+
+```
+/ (Tela inicial do totem)
+/cardapio
+/produto/[id]
+/carrinho
+/pagamento
+/confirmacao
+
+/painel/login
+/painel/pedidos  ← Kanban em tempo real
+/painel/kds      ← Tela do barista
+/painel/dashboard
+```
+
+---
+
+## Ativar Modo Quiosque
+
+### Chrome/Chromium (Windows)
+```bash
+chrome.exe --kiosk --no-first-run --disable-infobars http://localhost:3000
+```
+
+### Android — Fully Kiosk Browser
+1. Instalar Fully Kiosk Browser
+2. Configurar URL: `http://[IP_DO_SERVIDOR]:3000`
+3. Ativar kiosk mode nas configurações
+
+### Script systemd (Linux)
+```ini
+[Unit]
+Description=Coffee & Beats Totem
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/coffee-beats
+ExecStart=/usr/bin/node server.js
+Restart=always
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## Deploy em VPS
+
+```bash
+npm run build
+NODE_ENV=production node server.js
+```
+
+---
+
+## Variáveis de Ambiente
+
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | URL do PostgreSQL |
+| `NEXTAUTH_SECRET` | Segredo JWT (troque em produção) |
+| `NEXTAUTH_URL` | URL base da aplicação |
+| `NEXT_PUBLIC_SOCKET_URL` | URL do servidor Socket.IO |
+| `NEXT_PUBLIC_EMPRESA_ID` | ID da empresa (gerado pelo seed) |
+| `NEXT_PUBLIC_PAGAMENTO_SIMULADO` | `true` ativa botão de pagamento simulado |
+
+---
+
+## Resolução de Problemas
+
+**Prisma: shadow database sem permissão**
+```sql
+ALTER USER cb_user CREATEDB;
+```
+
+**NODE_TLS_REJECT_UNAUTHORIZED**
+Necessário apenas em dev se houver problemas de certificado local.
+Não use em produção.

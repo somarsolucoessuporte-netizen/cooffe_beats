@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
+@theme {
+  /* Cores Coffee & Beats */
+  --color-cb-espresso: #1A0A00;
+  --color-cb-dark: #2D1200;
+  --color-cb-mocha: #3D1F00;
+  --color-cb-caramel: #6B3A1F;
+  --color-cb-amber: #C8853A;
+  --color-cb-gold: #E5A84E;
+  --color-cb-cream: #F5EDD6;
+  --color-cb-latte: #EDE0C4;
+  --color-cb-leaf: #2C4A1E;
+  --color-cb-mint: #4A7C3F;
+  --color-cb-white: #FFFFFF;
+  --color-cb-black: #000000;
+
+  /* Tipografia */
+  --font-display: "Playfair Display", serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1A0A00;
+  --foreground: #F5EDD6;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Remove scrollbar visível no totem */
+.totem-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Animação das ondas sonoras */
+@keyframes soundwave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.soundwave-bar {
+  animation: soundwave 1.2s ease-in-out infinite;
+}
+
+/* Animação de check na confirmação */
+@keyframes draw-check {
+  0% { stroke-dashoffset: 100; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes scale-in {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.check-circle {
+  animation: scale-in 0.5s ease-out forwards;
+}
+
+.check-path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw-check 0.4s ease-out 0.4s forwards;
+}
+
+/* Pulse no CTA da tela inicial */
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 133, 58, 0.4); }
+  50% { box-shadow: 0 0 0 20px rgba(200, 133, 58, 0); }
+}
+
+.cta-pulse {
+  animation: cta-pulse 2s ease-in-out infinite;
+}
+
+/* Fade-in suave */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fade-in 0.4s ease-out forwards;
 }

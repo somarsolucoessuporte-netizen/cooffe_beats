@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Empresa {
+  id            String   @id @default(cuid())
+  nome          String
+  slug          String   @unique
+  logoUrl       String?
+  corPrimaria   String   @default("#C8853A")
+  corSecundaria String   @default("#1A0A00")
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+
+  categorias     Categoria[]
+  produtos       Produto[]
+  pedidos        Pedido[]
+  usuarios       Usuario[]
+  adicionais     Adicional[]
+  configuracao   Configuracao?
+}
+
+model Usuario {
+  id        String   @id @default(cuid())
+  empresaId String
+  nome      String
+  email     String   @unique
+  senha     String
+  perfil    Perfil   @default(ATENDENTE)
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
+  pedidos Pedido[] @relation("PedidoAtendente")
+}
+
+enum Perfil {
+  ADMIN
+  GERENTE
+  BARISTA
+  ATENDENTE
+}
+
+model Categoria {
+  id        String  @id @default(cuid())
+  empresaId String
+  nome      String
+  emoji     String
+  ordem     Int     @default(0)
+  ativo     Boolean @default(true)
+
+  empresa  Empresa   @relation(fields: [empresaId], references: [id])
+  produtos Produto[]
+}
+
+model Produto {
+  id          String   @id @default(cuid())
+  empresaId   String
+  categoriaId String
+  nome        String
+  descricao   String
+  preco       Decimal  @db.Decimal(10, 2)
+  fotoUrl     String?
+  destaque    Boolean  @default(false)
+  disponivel  Boolean  @default(true)
+  ordem       Int      @default(0)
+  criadoEm    DateTime @default(now())
+
+  empresa    Empresa            @relation(fields: [empresaId], references: [id])
+  categoria  Categoria          @relation(fields: [categoriaId], references: [id])
+  adicionais ProdutoAdicional[]
+  itensPedido ItemPedido[]
+}
+
+model Adicional {
+  id        String  @id @default(cuid())
+  empresaId String
+  nome      String
+  preco     Decimal @default(0) @db.Decimal(10, 2)
+  ativo     Boolean @default(true)
+
+  empresa  Empresa            @relation(fields: [empresaId], references: [id])
+  produtos ProdutoAdicional[]
+  itens    ItemAdicional[]
+}
+
+model ProdutoAdicional {
+  produtoId   String
+  adicionalId String
+
+  produto   Produto   @relation(fields: [produtoId], references: [id])
+  adicional Adicional @relation(fields: [adicionalId], references: [id])
+
+  @@id([produtoId, adicionalId])
+}
+
+model Pedido {
+  id           String       @id @default(cuid())
+  empresaId    String
+  senha        String
+  status       StatusPedido @default(RECEBIDO)
+  origem       Origem       @default(TOTEM)
+  subtotal     Decimal      @db.Decimal(10, 2)
+  total        Decimal      @db.Decimal(10, 2)
+  observacao   String?
+  atendenteId  String?
+  criadoEm     DateTime     @default(now())
+  atualizadoEm DateTime     @updatedAt
+  iniciadoEm   DateTime?
+  prontoEm     DateTime?
+  entregueEm   DateTime?
+
+  empresa   Empresa    @relation(fields: [empresaId], references: [id])
+  atendente Usuario?   @relation("PedidoAtendente", fields: [atendenteId], references: [id])
+  itens     ItemPedido[]
+  pagamento Pagamento?
+}
+
+enum StatusPedido {
+  RECEBIDO
+  EM_PREPARO
+  PRONTO
+  ENTREGUE
+  CANCELADO
+}
+
+enum Origem {
+  TOTEM
+  BALCAO
+  WHATSAPP
+  APP
+}
+
+model ItemPedido {
+  id         String  @id @default(cuid())
+  pedidoId   String
+  produtoId  String
+  quantidade Int     @default(1)
+  precoUnit  Decimal @db.Decimal(10, 2)
+  precoTotal Decimal @db.Decimal(10, 2)
+  observacao String?
+
+  pedido     Pedido          @relation(fields: [pedidoId], references: [id])
+  produto    Produto         @relation(fields: [produtoId], references: [id])
+  adicionais ItemAdicional[]
+}
+
+model ItemAdicional {
+  id           String  @id @default(cuid())
+  itemPedidoId String
+  adicionalId  String
+  preco        Decimal @db.Decimal(10, 2)
+
+  itemPedido ItemPedido @relation(fields: [itemPedidoId], references: [id])
+  adicional  Adicional  @relation(fields: [adicionalId], references: [id])
+}
+
+model Pagamento {
+  id         String          @id @default(cuid())
+  pedidoId   String          @unique
+  metodo     MetodoPagamento
+  status     StatusPagamento @default(PENDENTE)
+  valor      Decimal         @db.Decimal(10, 2)
+  referencia String?
+  payload    Json?
+  criadoEm   DateTime        @default(now())
+  paidAt     DateTime?
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id])
+}
+
+enum MetodoPagamento {
+  PIX
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  DINHEIRO
+  SIMULADO
+}
+
+enum StatusPagamento {
+  PENDENTE
+  APROVADO
+  RECUSADO
+  CANCELADO
+  ESTORNADO
+}
+
+model Configuracao {
+  id                  String  @id @default(cuid())
+  empresaId           String  @unique
+  tempoMedioMinutos   Int     @default(5)
+  prefixoSenha        String  @default("CB")
+  senhaAtual          Int     @default(100)
+  mensagemEspera      String  @default("Seu pedido está sendo preparado com carinho ☕")
+  logoUrl             String?
+  bgUrl               String?
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@map("configuracoes")
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  empresaId String?
+  tipo      String
+  payload   Json
+  criadoEm  DateTime @default(now())
+
+  @@map("logs")
+}
