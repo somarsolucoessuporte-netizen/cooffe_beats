@@ -59,23 +59,37 @@ export default function Home() {
     };
   }, [router]);
 
-  // Inicia áudio diretamente no gesto do usuário (requisito do browser)
-  const iniciarAudio = () => {
-    const audio = audioRef.current;
-    if (!audio || tocando) return;
-    audio.play().then(() => {
-      setTocando(true);
+  const toggleSom = () => {
+    if (!audioRef.current) return;
+    if (tocando) {
+      let vol = audioRef.current.volume;
+      const fadeOut = setInterval(() => {
+        vol -= 0.05;
+        if (vol <= 0) {
+          vol = 0;
+          clearInterval(fadeOut);
+          audioRef.current!.pause();
+        }
+        audioRef.current!.volume = vol;
+      }, 50);
+      setTocando(false);
+    } else {
+      audioRef.current.play().catch(() => {});
       let vol = 0;
+      audioRef.current.volume = 0;
       const fadeIn = setInterval(() => {
-        vol = Math.min(vol + 0.03, 0.3);
-        if (audio) audio.volume = vol;
-        if (vol >= 0.3) clearInterval(fadeIn);
-      }, 200);
-    }).catch(() => {});
+        vol += 0.03;
+        if (vol >= 0.3) {
+          vol = 0.3;
+          clearInterval(fadeIn);
+        }
+        audioRef.current!.volume = vol;
+      }, 100);
+      setTocando(true);
+    }
   };
 
-  const irParaCardapio = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const irParaCardapio = () => {
     playClick();
     const audio = audioRef.current;
     if (audio && tocando) {
@@ -96,7 +110,6 @@ export default function Home() {
     <div
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
       style={{ background: "#F6F0E5" }}
-      onClick={iniciarAudio}
     >
       {/* Partículas de fundo */}
       {PARTICLES.map((p, i) => (
@@ -164,11 +177,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* Indicador de áudio */}
-      <div className="absolute bottom-6 left-8 text-xl select-none pointer-events-none"
-           style={{ opacity: 0.4 }}>
+      {/* Botão de áudio */}
+      <button
+        onClick={toggleSom}
+        className="absolute bottom-6 left-8 text-2xl opacity-50 hover:opacity-100 transition-opacity"
+        title={tocando ? "Pausar música" : "Tocar música"}
+      >
         {tocando ? "🔊" : "🔇"}
-      </div>
+      </button>
     </div>
   );
 }
