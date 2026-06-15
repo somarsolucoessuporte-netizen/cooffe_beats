@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { calcularTempoDecorrido } from "@/lib/utils";
+import { imprimirComanda } from "@/lib/imprimir-comanda";
 
 interface ItemAdicional {
   adicional: { nome: string };
@@ -188,6 +189,26 @@ export default function KDS() {
                       PRONTO
                     </button>
                   )}
+                  <button
+                    onClick={() =>
+                      imprimirComanda({
+                        senha: pedido.senha,
+                        itens: pedido.itens.map((item) => ({
+                          nome: item.produto.nome,
+                          quantidade: item.quantidade,
+                          adicionais: item.adicionais.map((a) => a.adicional.nome),
+                          observacao: item.observacao ?? undefined,
+                        })),
+                        total: 0,
+                        via: "BARISTA",
+                      })
+                    }
+                    className="px-3 py-3 rounded-xl border border-white/20 text-zinc-300
+                               hover:bg-white/10 transition-colors text-lg"
+                    title="Reimprimir comanda"
+                  >
+                    🖨️
+                  </button>
                 </div>
               </div>
             ))}

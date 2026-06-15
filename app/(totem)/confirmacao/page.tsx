@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import { playClick } from "@/lib/sounds";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { imprimirComanda } from "@/lib/imprimir-comanda";
 
 const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }> = {
   RECEBIDO:   { icone: "⏳", texto: "Recebido",                     cor: "text-cb-amber" },
@@ -11,6 +12,8 @@ const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }>
   PRONTO:     { icone: "🎉", texto: "Pronto! Retire no balcão",      cor: "text-green-500" },
   ENTREGUE:   { icone: "✅", texto: "Entregue. Bom proveito!",       cor: "text-cb-marrom/50" },
 };
+
+const impressaoAtiva = process.env.NEXT_PUBLIC_IMPRESSAO_ATIVA !== "false";
 
 function ConfirmacaoConteudo() {
   const router = useRouter();
@@ -24,14 +27,48 @@ function ConfirmacaoConteudo() {
   const tempoEstimado = 5;
   const duracao       = tempoEstimado * 60 * 1000;
   const inicioRef     = useRef(Date.now());
+  const impressaoDisparadaRef = useRef(false);
 
-  // Busca status inicial + escuta realtime
+  // Busca status inicial + dados do pedido para impressão + escuta realtime
   useEffect(() => {
     if (!pedidoId) return;
 
     fetch(`/api/pedidos/${pedidoId}`)
       .then((r) => r.json())
-      .then((d) => { if (d.ok) setStatusAtual(d.data.status); })
+      .then((d) => {
+        if (!d.ok) return;
+        setStatusAtual(d.data.status);
+
+        // Impressão automática — dispara apenas uma vez
+        if (impressaoAtiva && !impressaoDisparadaRef.current) {
+          impressaoDisparadaRef.current = true;
+
+          const pedido = d.data;
+
+          // Monta itens no formato esperado por imprimirComanda
+          const itens = (pedido.itens ?? []).map((item: {
+            quantidade: number;
+            produto: { nome: string };
+            adicionais: { adicional: { nome: string } }[];
+            observacao?: string | null;
+          }) => ({
+            nome: item.produto.nome,
+            quantidade: item.quantidade,
+            adicionais: item.adicionais.map((a) => a.adicional.nome),
+            observacao: item.observacao ?? undefined,
+          }));
+
+          const total: number = pedido.total ?? 0;
+
+          // Via cliente — imediata
+          imprimirComanda({ senha: pedido.senha, itens, total, via: "CLIENTE" });
+
+          // Via cozinha — 1 s depois para não sobrepor diálogos
+          setTimeout(() => {
+            imprimirComanda({ senha: pedido.senha, itens, total, via: "COZINHA" });
+          }, 1000);
+        }
+      })
       .catch(() => {});
 
     const empresaId = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
