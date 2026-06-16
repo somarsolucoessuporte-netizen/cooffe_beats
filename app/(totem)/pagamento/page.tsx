@@ -11,9 +11,12 @@ import { iniciarPagamentoNFC } from "@/lib/sunmi";
 
 type Tela = "escolha" | "pix" | "cartao";
 
-const DEMO = process.env.NEXT_PUBLIC_PAGAMENTO_SIMULADO === "true";
-const POLL_MS = 3_000;
-const TIMEOUT_MS = 5 * 60 * 1_000;
+// Demo quando SumUp não configurado OU variável de simulação ativa
+const DEMO =
+  !process.env.NEXT_PUBLIC_SUMUP_AFFILIATE_KEY ||
+  process.env.NEXT_PUBLIC_PAGAMENTO_SIMULADO === "true";
+const POLL_MS = 3000;
+const TIMEOUT_MS = 5 * 60 * 1000;
 
 // QR Code visual para modo demo
 function QRFakeDemo() {

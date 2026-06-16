@@ -7,104 +7,101 @@ import { supabase } from "@/lib/supabase";
 import { imprimirComanda } from "@/lib/imprimir-comanda";
 
 const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }> = {
-  RECEBIDO:   { icone: "⏳", texto: "Recebido",                     cor: "text-cb-amber" },
-  EM_PREPARO: { icone: "☕", texto: "Preparando seu pedido...",      cor: "text-blue-500" },
-  PRONTO:     { icone: "🎉", texto: "Pronto! Retire no balcão",      cor: "text-green-500" },
-  ENTREGUE:   { icone: "✅", texto: "Entregue. Bom proveito!",       cor: "text-cb-marrom/50" },
+  RECEBIDO:   { icone: "⏳", texto: "Recebido",                cor: "text-cb-amber" },
+  EM_PREPARO: { icone: "☕", texto: "Preparando seu pedido...", cor: "text-blue-500" },
+  PRONTO:     { icone: "🎉", texto: "Pronto! Retire no balcão", cor: "text-green-500" },
+  ENTREGUE:   { icone: "✅", texto: "Entregue. Bom proveito!",  cor: "text-cb-marrom/50" },
 };
 
 const impressaoAtiva = process.env.NEXT_PUBLIC_IMPRESSAO_ATIVA !== "false";
 
+interface ItemDoPedido {
+  quantidade: number;
+  produto: { nome: string };
+  adicionais: { adicional: { nome: string } }[];
+  observacao?: string | null;
+}
+
 function ConfirmacaoConteudo() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const senha     = searchParams.get("senha") ?? "CB-???";
-  const pedidoId  = searchParams.get("id")    ?? "";
+  const senha    = searchParams.get("senha") ?? "CB-???";
+  const pedidoId = searchParams.get("id")    ?? "";
 
   const [mostrarBotao, setMostrarBotao] = useState(false);
   const [progresso, setProgresso]       = useState(100);
   const [statusAtual, setStatusAtual]   = useState("RECEBIDO");
-  const tempoEstimado = 5;
-  const duracao       = tempoEstimado * 60 * 1000;
-  const inicioRef     = useRef(Date.now());
-  const impressaoDisparadaRef = useRef(false);
+  const [itensPedido, setItensPedido]   = useState<ItemDoPedido[]>([]);
+  const [totalPedido, setTotalPedido]   = useState(0);
 
-  // Busca status inicial + dados do pedido para impressão + escuta realtime
-  useEffect(() => {
+  const duracaoMs = 5 * 60 * 1000;
+  const inicioRef = useRef(Date.now());
+
+  // Busca status + dados do pedido (sem impressão automática)
+  useEffect(function() {
     if (!pedidoId) return;
 
-    fetch(`/api/pedidos/${pedidoId}`)
-      .then((r) => r.json())
-      .then((d) => {
+    fetch("/api/pedidos/" + pedidoId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
         if (!d.ok) return;
         setStatusAtual(d.data.status);
-
-        // Impressão automática — dispara apenas uma vez
-        if (impressaoAtiva && !impressaoDisparadaRef.current) {
-          impressaoDisparadaRef.current = true;
-
-          const pedido = d.data;
-
-          // Monta itens no formato esperado por imprimirComanda
-          const itens = (pedido.itens ?? []).map((item: {
-            quantidade: number;
-            produto: { nome: string };
-            adicionais: { adicional: { nome: string } }[];
-            observacao?: string | null;
-          }) => ({
-            nome: item.produto.nome,
-            quantidade: item.quantidade,
-            adicionais: item.adicionais.map((a) => a.adicional.nome),
-            observacao: item.observacao ?? undefined,
-          }));
-
-          const total: number = pedido.total ?? 0;
-
-          // Via cliente — imediata
-          imprimirComanda({ senha: pedido.senha, itens, total, via: "CLIENTE" });
-
-          // Via cozinha — 1 s depois para não sobrepor diálogos
-          setTimeout(() => {
-            imprimirComanda({ senha: pedido.senha, itens, total, via: "COZINHA" });
-          }, 1000);
-        }
+        setItensPedido(d.data.itens ?? []);
+        setTotalPedido(Number(d.data.total ?? 0));
       })
-      .catch(() => {});
+      .catch(function() {});
 
-    const empresaId = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
-    const channel = supabase
-      .channel(`empresa-${empresaId}`)
-      .on("broadcast", { event: "pedido:atualizado" }, ({ payload }) => {
-        if ((payload as { id: string }).id === pedidoId) {
-          setStatusAtual((payload as { status: string }).status);
+    var empresaId = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
+    var channel = supabase
+      .channel("empresa-" + empresaId)
+      .on("broadcast", { event: "pedido:atualizado" }, function(msg) {
+        var payload = msg.payload as { id: string; status: string };
+        if (payload.id === pedidoId) {
+          setStatusAtual(payload.status);
         }
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return function() { supabase.removeChannel(channel); };
   }, [pedidoId]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setMostrarBotao(true), 8_000);
-    return () => clearTimeout(t);
+  useEffect(function() {
+    var t = setTimeout(function() { setMostrarBotao(true); }, 8000);
+    return function() { clearTimeout(t); };
   }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => router.push("/"), 30_000);
-    return () => clearTimeout(t);
+  useEffect(function() {
+    var t = setTimeout(function() { router.push("/"); }, 30000);
+    return function() { clearTimeout(t); };
   }, [router]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const decorrido = Date.now() - inicioRef.current;
-      const restante  = Math.max(0, 100 - (decorrido / duracao) * 100);
+  useEffect(function() {
+    var interval = setInterval(function() {
+      var decorrido = Date.now() - inicioRef.current;
+      var restante  = Math.max(0, 100 - (decorrido / duracaoMs) * 100);
       setProgresso(restante);
       if (restante === 0) clearInterval(interval);
     }, 1000);
-    return () => clearInterval(interval);
-  }, [duracao]);
+    return function() { clearInterval(interval); };
+  }, [duracaoMs]);
 
-  const info = STATUS_INFO[statusAtual] ?? STATUS_INFO.RECEBIDO;
+  function handleImprimir() {
+    playClick();
+    var itens = itensPedido.map(function(item) {
+      return {
+        nome: item.produto.nome,
+        quantidade: item.quantidade,
+        adicionais: item.adicionais.map(function(a) { return a.adicional.nome; }),
+        observacao: item.observacao ?? undefined,
+      };
+    });
+    imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "CLIENTE" });
+    setTimeout(function() {
+      imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "COZINHA" });
+    }, 1000);
+  }
+
+  var info = STATUS_INFO[statusAtual] ?? STATUS_INFO.RECEBIDO;
 
   return (
     <main className="h-full flex flex-col items-center justify-center gap-8 px-8 text-center animate-fadeIn">
@@ -133,8 +130,8 @@ function ConfirmacaoConteudo() {
       </div>
 
       {/* Status em tempo real */}
-      <div className={`flex items-center gap-3 text-2xl font-extrabold transition-all ${info.cor}
-                       ${statusAtual === "PRONTO" ? "animate-pulse" : ""}`}>
+      <div className={"flex items-center gap-3 text-2xl font-extrabold transition-all " + info.cor +
+                      (statusAtual === "PRONTO" ? " animate-pulse" : "")}>
         <span>{info.icone}</span>
         <span>{info.texto}</span>
       </div>
@@ -143,15 +140,26 @@ function ConfirmacaoConteudo() {
       <div className="w-full max-w-sm bg-cb-marrom/10 rounded-full h-3 overflow-hidden">
         <div
           className="h-full bg-cb-amber rounded-full transition-all duration-1000 ease-linear"
-          style={{ width: `${progresso}%` }}
+          style={{ width: progresso + "%" }}
         />
       </div>
 
-      <p className="text-cb-marrom/50 text-base">Previsão: ~{tempoEstimado} minutos</p>
+      <p className="text-cb-marrom/50 text-base">Previsão: ~5 minutos</p>
+
+      {/* Botão de impressão manual (operador) */}
+      {impressaoAtiva && itensPedido.length > 0 && (
+        <button
+          onClick={handleImprimir}
+          className="text-cb-marrom/40 text-sm border border-cb-marrom/20 rounded-full px-5 py-2
+                     hover:border-cb-marrom/50 hover:text-cb-marrom/70 transition-colors"
+        >
+          🖨️ Imprimir Comanda
+        </button>
+      )}
 
       {mostrarBotao && (
         <button
-          onClick={() => { playClick(); router.push("/"); }}
+          onClick={function() { playClick(); router.push("/"); }}
           className="fade-in bg-cb-marrom text-cb-bege font-extrabold font-sans text-xl
                      py-5 px-12 rounded-full touch-manipulation btn-totem min-h-[72px]"
         >
