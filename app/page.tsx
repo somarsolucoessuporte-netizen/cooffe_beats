@@ -32,11 +32,15 @@ export default function Home() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const musica = MUSICAS[Math.floor(Math.random() * MUSICAS.length)];
-    const audio  = new Audio(musica);
-    audio.volume = 0;
-    audio.loop   = true;
-    audioRef.current = audio;
+    try {
+      const musica = MUSICAS[Math.floor(Math.random() * MUSICAS.length)];
+      const audio  = new Audio(musica);
+      audio.volume = 0;
+      audio.loop   = true;
+      audioRef.current = audio;
+    } catch {
+      // áudio não suportado no dispositivo — continua sem música
+    }
     return () => {
       audioRef.current?.pause();
       audioRef.current = null;

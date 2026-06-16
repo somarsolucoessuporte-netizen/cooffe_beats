@@ -7,6 +7,8 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 })
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {}
+const nextConfig = {
+  transpilePackages: ["@supabase/supabase-js", "@supabase/ssr"],
+}
 
 module.exports = withPWA(nextConfig)
