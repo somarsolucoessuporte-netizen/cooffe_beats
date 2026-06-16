@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Montserrat, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { DebugConsole } from "@/components/DebugConsole";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -37,7 +36,6 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
       </head>
       <body className="h-full antialiased">
-        <DebugConsole />
         {children}
       </body>
     </html>
