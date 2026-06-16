@@ -25,16 +25,17 @@ export async function GET() {
 
   if (!caixa) return resposta({ aberto: false, caixa: null });
 
-  const totalVendas = caixa.pedidos.reduce((acc, p) => acc + Number(p.total), 0);
+  const totalVendas   = caixa.pedidos.reduce((acc, p) => acc + Number(p.total), 0);
   const totalPix      = caixa.pedidos.filter(p => p.pagamento?.metodo === "PIX").reduce((acc, p) => acc + Number(p.total), 0);
   const totalCartao   = caixa.pedidos.filter(p => ["CARTAO_CREDITO","CARTAO_DEBITO"].includes(p.pagamento?.metodo ?? "")).reduce((acc, p) => acc + Number(p.total), 0);
   const totalDinheiro = caixa.pedidos.filter(p => p.pagamento?.metodo === "DINHEIRO").reduce((acc, p) => acc + Number(p.total), 0);
+  const ticketMedio   = caixa.pedidos.length > 0 ? totalVendas / caixa.pedidos.length : 0;
 
   return resposta({
     aberto: true,
     caixa: {
-      id:           caixa.id,
-      abridoEm:     caixa.abridoEm,
+      id:            caixa.id,
+      abridoEm:      caixa.abridoEm,
       valorAbertura: Number(caixa.valorAbertura),
       operador:      caixa.usuario.nome,
     },
@@ -44,6 +45,7 @@ export async function GET() {
       totalPix,
       totalCartao,
       totalDinheiro,
+      ticketMedio,
     },
   });
 }

@@ -41,6 +41,14 @@ export default function KDS() {
   const empresaId = (session?.user as { empresaId?: string })?.empresaId ?? "";
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [tick, setTick] = useState(0);
+  const [caixaFechado, setCaixaFechado] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/caixa/status")
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setCaixaFechado(!d.data.aberto); })
+      .catch(() => {});
+  }, []);
 
   const buscarPedidos = useCallback(async () => {
     if (!empresaId) return;
@@ -107,8 +115,19 @@ export default function KDS() {
             {pedidos.length} pedido(s) em aberto
           </p>
         </div>
-        <div className="text-sm font-mono" style={{ color: "#C8853A" }}>
-          {new Date().toLocaleTimeString("pt-BR")}
+        <div className="flex items-center gap-4">
+          {caixaFechado && (
+            <a
+              href="/caixa"
+              className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/40
+                         text-amber-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-amber-500/30 transition-all"
+            >
+              ⚠️ Caixa não aberto — Abrir Caixa
+            </a>
+          )}
+          <div className="text-sm font-mono" style={{ color: "#C8853A" }}>
+            {new Date().toLocaleTimeString("pt-BR")}
+          </div>
         </div>
       </div>
 
