@@ -1,0 +1,24 @@
+{
+  "name": "Coffee & Beats — Admin",
+  "short_name": "CB Admin",
+  "description": "Gestão Coffee & Beats",
+  "start_url": "/login?redirect=/admin/produtos",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#3B2415",
+  "theme_color": "#3B2415",
+  "icons": [
+    {
+      "src": "/icon-admin-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-admin-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Coffee & Beats",
   description: "Autoatendimento Coffee & Beats",
-  manifest: "/manifest.json",
+  manifest: "/manifest-totem.json",
 };
 
 export default function RootLayout({
@@ -31,7 +31,6 @@ export default function RootLayout({
       className={`${montserrat.variable} ${jetbrainsMono.variable} h-full`}
     >
       <head>
-        <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#3B2415" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

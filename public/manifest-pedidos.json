@@ -1,0 +1,24 @@
+{
+  "name": "Coffee & Beats — Pedidos",
+  "short_name": "CB Pedidos",
+  "description": "Painel de Pedidos Coffee & Beats",
+  "start_url": "/login?redirect=/pedidos",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#C8853A",
+  "theme_color": "#3B2415",
+  "icons": [
+    {
+      "src": "/icon-pedidos-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-pedidos-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

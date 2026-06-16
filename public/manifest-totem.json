@@ -1,0 +1,24 @@
+{
+  "name": "Coffee & Beats — Totem",
+  "short_name": "CB Totem",
+  "description": "Autoatendimento Coffee & Beats",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#F6F0E5",
+  "theme_color": "#3B2415",
+  "icons": [
+    {
+      "src": "/icon-totem-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-totem-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
