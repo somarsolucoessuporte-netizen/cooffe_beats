@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { supabaseAdmin } from "@/lib/supabase";
+import { notificarWhatsApp } from "@/lib/notificar-whatsapp";
 
 const ItemSchema = z.object({
   produtoId: z.string(),
@@ -117,6 +118,23 @@ export async function POST(req: NextRequest) {
         where: { id: clienteId },
         data: { totalGasto: { increment: Number(pedido.total) } },
       }).catch(() => {});
+
+      // Notificação WhatsApp de confirmação
+      prisma.cliente.findUnique({ where: { id: clienteId }, select: { nome: true, whatsapp: true } })
+        .then(function(cliente) {
+          if (!cliente?.whatsapp) return;
+          notificarWhatsApp({
+            whatsapp: cliente.whatsapp,
+            tipo: "PEDIDO_CONFIRMADO",
+            cliente: { nome: cliente.nome },
+            pedido: {
+              senha: pedido.senha,
+              itens: pedido.itens.map(function(i) { return { nome: i.produto.nome, quantidade: i.quantidade }; }),
+              total: Number(pedido.total),
+            },
+          });
+        })
+        .catch(function() {});
     }
 
     await supabaseAdmin.channel(`empresa-${empresaId}`).send({

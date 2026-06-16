@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { supabaseAdmin } from "@/lib/supabase";
+import { notificarWhatsApp } from "@/lib/notificar-whatsapp";
 
 const AtualizarStatusSchema = z.object({
   status: z.enum(["RECEBIDO", "EM_PREPARO", "PRONTO", "ENTREGUE", "CANCELADO"]),
@@ -40,8 +41,23 @@ export async function PATCH(
             adicionais: { include: { adicional: true } },
           },
         },
+        cliente: { select: { nome: true, whatsapp: true } },
       },
     });
+
+    // Notificação WhatsApp (fire-and-forget)
+    if (pedido.cliente?.whatsapp && (status === "PRONTO" || status === "ENTREGUE")) {
+      notificarWhatsApp({
+        whatsapp: pedido.cliente.whatsapp,
+        tipo: status === "PRONTO" ? "PEDIDO_PRONTO" : "PEDIDO_ENTREGUE",
+        cliente: { nome: pedido.cliente.nome },
+        pedido: {
+          senha: pedido.senha,
+          itens: pedido.itens.map(i => ({ nome: i.produto.nome, quantidade: i.quantidade })),
+          total: Number(pedido.total),
+        },
+      });
+    }
 
     await supabaseAdmin.channel(`empresa-${pedido.empresaId}`).send({
       type: "broadcast",
