@@ -6,7 +6,7 @@ export interface SumupCheckout {
 }
 
 export interface SumupStatus {
-  status: "PENDING" | "PAID" | "FAILED";
+  status: "PENDING" | "PAID" | "FAILED" | "SUCCESSFUL" | "EXPIRED";
   transaction_id?: string;
 }
 

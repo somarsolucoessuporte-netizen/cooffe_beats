@@ -28,7 +28,6 @@ function ConfirmacaoConteudo() {
   const senha    = searchParams.get("senha") ?? "CB-???";
   const pedidoId = searchParams.get("id")    ?? "";
 
-  const [mostrarBotao, setMostrarBotao]       = useState(false);
   const [progresso, setProgresso]             = useState(100);
   const [statusAtual, setStatusAtual]         = useState("RECEBIDO");
   const [itensPedido, setItensPedido]         = useState<ItemDoPedido[]>([]);
@@ -66,11 +65,6 @@ function ConfirmacaoConteudo() {
 
     return function() { supabase.removeChannel(channel); };
   }, [pedidoId]);
-
-  useEffect(function() {
-    var t = setTimeout(function() { setMostrarBotao(true); }, 8000);
-    return function() { clearTimeout(t); };
-  }, []);
 
   useEffect(function() {
     var t = setTimeout(function() { router.push("/"); }, 30000);
@@ -148,6 +142,24 @@ function ConfirmacaoConteudo() {
 
       <p className="text-cb-marrom/50 text-base">Previsão: ~5 minutos</p>
 
+      {/* Botões de ação — visíveis imediatamente */}
+      <div className="flex gap-4 mt-2">
+        <button
+          onClick={function() { playClick(); router.push("/"); }}
+          className="bg-cb-marrom text-cb-bege font-extrabold font-sans text-lg
+                     py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
+        >
+          🏠 Início
+        </button>
+        <button
+          onClick={function() { playClick(); router.push("/cardapio"); }}
+          className="bg-cb-amber text-white font-extrabold font-sans text-lg
+                     py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
+        >
+          ☕ Novo Pedido
+        </button>
+      </div>
+
       {/* Botão de impressão manual (operador) */}
       {impressaoAtiva && itensPedido.length > 0 && (
         <button
@@ -156,16 +168,6 @@ function ConfirmacaoConteudo() {
                      hover:border-cb-marrom/50 hover:text-cb-marrom/70 transition-colors"
         >
           🖨️ Imprimir Comanda
-        </button>
-      )}
-
-      {mostrarBotao && (
-        <button
-          onClick={function() { playClick(); router.push("/"); }}
-          className="fade-in bg-cb-marrom text-cb-bege font-extrabold font-sans text-xl
-                     py-5 px-12 rounded-full touch-manipulation btn-totem min-h-[72px]"
-        >
-          Fazer Novo Pedido
         </button>
       )}
     </main>
