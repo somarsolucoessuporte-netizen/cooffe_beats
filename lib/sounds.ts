@@ -1,14 +1,13 @@
-export const playClick = () => {
+export var playClick = function() {
   try {
     if (typeof window === "undefined") return;
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    var AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    var ctx = new AudioCtx();
     if (ctx.state === "suspended") ctx.resume();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
+    var oscillator = ctx.createOscillator();
+    var gain = ctx.createGain();
     oscillator.connect(gain);
     gain.connect(ctx.destination);
     oscillator.frequency.value = 800;
@@ -17,7 +16,7 @@ export const playClick = () => {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.1);
-  } catch {
-    // som não é crítico — falha silenciosa
+  } catch(e) {
+    // silencioso — som não é crítico
   }
 };

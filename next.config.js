@@ -1,14 +1,14 @@
-const withPWA = require("@ducanh2912/next-pwa").default({
-  dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
-  disable: process.env.NODE_ENV === "development",
-})
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@supabase/supabase-js", "@supabase/ssr"],
+  transpilePackages: [
+    "@supabase/supabase-js",
+    "@supabase/ssr",
+    "@supabase/realtime-js",
+    "@supabase/postgrest-js",
+  ],
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production",
+  },
 }
 
-module.exports = withPWA(nextConfig)
+module.exports = nextConfig

@@ -31,30 +31,34 @@ export default function Home() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => {
+  useEffect(function() {
     try {
-      const musica = MUSICAS[Math.floor(Math.random() * MUSICAS.length)];
-      const audio  = new Audio(musica);
+      var idx = Math.floor(Math.random() * MUSICAS.length);
+      var audio = new Audio(MUSICAS[idx]);
       audio.volume = 0;
-      audio.loop   = true;
+      audio.loop = true;
       audioRef.current = audio;
-    } catch {
-      // áudio não suportado no dispositivo — continua sem música
+    } catch(e) {
+      // áudio não suportado — continua sem música
     }
-    return () => {
-      audioRef.current?.pause();
-      audioRef.current = null;
+    return function() {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, []);
 
-  useEffect(() => {
+  useEffect(function() {
     setHora(new Date().toLocaleTimeString("pt-BR"));
-    const clock    = setInterval(() => setHora(new Date().toLocaleTimeString("pt-BR")), 1_000);
-    const t1       = setTimeout(() => setFase(1), 500);
-    const t2       = setTimeout(() => setFase(2), 1_500);
-    const t3       = setTimeout(() => setFase(3), 2_500);
-    const redirect = setTimeout(() => router.push("/cardapio"), 30_000);
-    return () => {
+    var clock = setInterval(function() {
+      setHora(new Date().toLocaleTimeString("pt-BR"));
+    }, 1000);
+    var t1 = setTimeout(function() { setFase(1); }, 500);
+    var t2 = setTimeout(function() { setFase(2); }, 1500);
+    var t3 = setTimeout(function() { setFase(3); }, 2500);
+    var redirect = setTimeout(function() { router.push("/cardapio"); }, 30000);
+    return function() {
       clearInterval(clock);
       clearTimeout(t1);
       clearTimeout(t2);
@@ -63,51 +67,54 @@ export default function Home() {
     };
   }, [router]);
 
-  const toggleSom = () => {
+  var toggleSom = function() {
     if (!audioRef.current) return;
     if (tocando) {
-      let vol = audioRef.current.volume;
-      const fadeOut = setInterval(() => {
+      var vol = audioRef.current.volume;
+      var ref = audioRef.current;
+      var fadeOut = setInterval(function() {
         vol -= 0.05;
         if (vol <= 0) {
           vol = 0;
           clearInterval(fadeOut);
-          audioRef.current!.pause();
+          if (ref) ref.pause();
         }
-        audioRef.current!.volume = vol;
+        if (ref) ref.volume = vol;
       }, 50);
       setTocando(false);
     } else {
-      audioRef.current.play().catch(() => {});
-      let vol = 0;
-      audioRef.current.volume = 0;
-      const fadeIn = setInterval(() => {
-        vol += 0.03;
-        if (vol >= 0.3) {
-          vol = 0.3;
+      var audio = audioRef.current;
+      audio.play().catch(function() {});
+      var v = 0;
+      audio.volume = 0;
+      var fadeIn = setInterval(function() {
+        v += 0.03;
+        if (v >= 0.3) {
+          v = 0.3;
           clearInterval(fadeIn);
         }
-        audioRef.current!.volume = vol;
+        if (audio) audio.volume = v;
       }, 100);
       setTocando(true);
     }
   };
 
-  const irParaCardapio = () => {
+  var irParaCardapio = function() {
     playClick();
-    const audio = audioRef.current;
+    var audio = audioRef.current;
     if (audio && tocando) {
-      let vol = audio.volume;
-      const fadeOut = setInterval(() => {
-        vol = Math.max(vol - 0.05, 0);
+      var vol = audio.volume;
+      var fadeOut = setInterval(function() {
+        vol = vol - 0.05;
+        if (vol < 0) vol = 0;
         if (audio) audio.volume = vol;
         if (vol <= 0) {
           clearInterval(fadeOut);
-          audio.pause();
+          if (audio) audio.pause();
         }
       }, 100);
     }
-    setTimeout(() => router.push("/cardapio"), 600);
+    setTimeout(function() { router.push("/cardapio"); }, 600);
   };
 
   return (
@@ -115,25 +122,25 @@ export default function Home() {
       className="h-screen w-screen flex flex-col items-center justify-center select-none overflow-hidden"
       style={{ background: "#F6F0E5" }}
     >
-      {/* Partículas de fundo */}
-      {PARTICLES.map((p, i) => (
-        <span
-          key={i}
-          className="particle absolute rounded-full pointer-events-none"
-          style={{
-            top: p.top,
-            left: p.left,
-            width: p.size,
-            height: p.size,
-            background: "rgba(59,36,21,0.12)",
-            "--dur": p.dur,
-            "--delay": p.delay,
-          } as React.CSSProperties}
-        />
-      ))}
+      {PARTICLES.map(function(p, i) {
+        return (
+          <span
+            key={i}
+            className="particle absolute rounded-full pointer-events-none"
+            style={{
+              top: p.top,
+              left: p.left,
+              width: p.size,
+              height: p.size,
+              background: "rgba(59,36,21,0.12)",
+              "--dur": p.dur,
+              "--delay": p.delay,
+            } as React.CSSProperties}
+          />
+        );
+      })}
 
       <div className="flex flex-col items-center gap-8 px-8 text-center">
-        {/* Fase 1 — Logo */}
         {fase >= 1 && (
           !logoError ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -144,21 +151,19 @@ export default function Home() {
               height={200}
               style={{ objectFit: "contain" }}
               className={`w-48 h-48 ${fase >= 2 ? "logo-pulse" : "logo-reveal"}`}
-              onError={() => setLogoError(true)}
+              onError={function() { setLogoError(true); }}
             />
           ) : (
             <span className="logo-reveal text-8xl">☕</span>
           )
         )}
 
-        {/* Fase 2 — Slogan */}
         {fase >= 2 && (
           <p className="slide-up text-xl text-amber-800/80">
             Onde o café encontra o ritmo da sua vida
           </p>
         )}
 
-        {/* Fase 3 — Botão */}
         {fase >= 3 && (
           <div className="slide-up flex flex-col items-center gap-4">
             <button
@@ -174,14 +179,12 @@ export default function Home() {
         )}
       </div>
 
-      {/* Relógio */}
-      {hora && (
+      {hora !== "" && (
         <div className="absolute bottom-6 right-8 font-mono text-sm text-amber-800/50 select-none">
           {hora}
         </div>
       )}
 
-      {/* Botão de áudio */}
       <button
         onClick={toggleSom}
         className="absolute bottom-6 left-8 text-2xl opacity-50 hover:opacity-100 transition-opacity"
