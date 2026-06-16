@@ -57,7 +57,7 @@ export default function Home() {
     var t1 = setTimeout(function() { setFase(1); }, 500);
     var t2 = setTimeout(function() { setFase(2); }, 1500);
     var t3 = setTimeout(function() { setFase(3); }, 2500);
-    var redirect = setTimeout(function() { router.push("/cardapio"); }, 30000);
+    var redirect = setTimeout(function() { router.push("/identificacao"); }, 30000);
     return function() {
       clearInterval(clock);
       clearTimeout(t1);
@@ -114,7 +114,7 @@ export default function Home() {
         }
       }, 100);
     }
-    setTimeout(function() { router.push("/cardapio"); }, 600);
+    setTimeout(function() { router.push("/identificacao"); }, 600);
   };
 
   return (

@@ -23,6 +23,8 @@ const CriarPedidoSchema = z.object({
   empresaId: z.string(),
   itens: z.array(ItemSchema).min(1),
   observacao: z.string().optional(),
+  clienteId: z.string().optional(),
+  mesaId: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
       return erroResposta(validacao.error.message);
     }
 
-    const { empresaId, itens, observacao } = validacao.data;
+    const { empresaId, itens, observacao, clienteId, mesaId } = validacao.data;
 
     const pedido = await prisma.$transaction(async (tx) => {
       // Gerar senha sequencial
@@ -77,7 +79,9 @@ export async function POST(req: NextRequest) {
           subtotal,
           total: subtotal,
           observacao,
-          caixaId: caixaAberto?.id ?? null,
+          caixaId:   caixaAberto?.id ?? null,
+          clienteId: clienteId ?? null,
+          mesaId:    mesaId    ?? null,
           itens: {
             create: itens.map((item) => ({
               produtoId: item.produtoId,
@@ -106,6 +110,14 @@ export async function POST(req: NextRequest) {
 
       return novoPedido;
     });
+
+    // Atualiza estatísticas do cliente em background (fire-and-forget)
+    if (clienteId) {
+      prisma.cliente.update({
+        where: { id: clienteId },
+        data: { totalGasto: { increment: Number(pedido.total) } },
+      }).catch(() => {});
+    }
 
     await supabaseAdmin.channel(`empresa-${empresaId}`).send({
       type: "broadcast",

@@ -25,6 +25,8 @@ model Empresa {
   adicionais     Adicional[]
   configuracao   Configuracao?
   caixas         Caixa[]
+  clientes       Cliente[]
+  mesas          Mesa[]
 }
 
 model Usuario {
@@ -119,10 +121,14 @@ model Pedido {
   entregueEm   DateTime?
 
   caixaId      String?
+  clienteId    String?
+  mesaId       String?
 
   empresa   Empresa    @relation(fields: [empresaId], references: [id])
   atendente Usuario?   @relation("PedidoAtendente", fields: [atendenteId], references: [id])
   caixa     Caixa?     @relation(fields: [caixaId], references: [id])
+  cliente   Cliente?   @relation(fields: [clienteId], references: [id])
+  mesa      Mesa?      @relation(fields: [mesaId], references: [id])
   itens     ItemPedido[]
   pagamento Pagamento?
 }
@@ -261,6 +267,37 @@ model Caixa {
   pedidos  Pedido[]
 
   @@map("caixas")
+}
+
+model Cliente {
+  id           String   @id @default(cuid())
+  empresaId    String
+  nome         String
+  whatsapp     String
+  totalVisitas Int      @default(1)
+  totalGasto   Decimal  @default(0) @db.Decimal(10, 2)
+  ultimaVisita DateTime @default(now())
+  criadoEm     DateTime @default(now())
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
+  pedidos Pedido[]
+
+  @@unique([empresaId, whatsapp])
+  @@map("clientes")
+}
+
+model Mesa {
+  id        String  @id @default(cuid())
+  empresaId String
+  numero    Int
+  nome      String?
+  qrCode    String?
+  ativo     Boolean @default(true)
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
+  pedidos Pedido[]
+
+  @@map("mesas")
 }
 
 model Log {

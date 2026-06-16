@@ -137,11 +137,20 @@ export default function Pagamento() {
   }, [limparCarrinho, router]);
 
   const criarPedido = useCallback(async () => {
+    var clienteId: string | null = null;
+    var mesaId: string | null = null;
+    try {
+      clienteId = sessionStorage.getItem("clienteId");
+      mesaId    = sessionStorage.getItem("mesaId");
+    } catch(e) {}
+
     const res = await fetch("/api/pedidos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         empresaId,
+        clienteId: clienteId ?? undefined,
+        mesaId:    mesaId    ?? undefined,
         itens: itens.map((item) => ({
           produtoId: item.produtoId,
           quantidade: item.quantidade,
