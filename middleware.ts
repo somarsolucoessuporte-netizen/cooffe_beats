@@ -1,7 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/pedidos", "/kds", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/pedidos", "/kds", "/admin", "/clientes", "/caixa"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -34,5 +34,7 @@ export const config = {
     "/pedidos/:path*",
     "/kds/:path*",
     "/admin/:path*",
+    "/clientes/:path*",
+    "/caixa/:path*",
   ],
 };
