@@ -28,11 +28,12 @@ function ConfirmacaoConteudo() {
   const senha    = searchParams.get("senha") ?? "CB-???";
   const pedidoId = searchParams.get("id")    ?? "";
 
-  const [mostrarBotao, setMostrarBotao] = useState(false);
-  const [progresso, setProgresso]       = useState(100);
-  const [statusAtual, setStatusAtual]   = useState("RECEBIDO");
-  const [itensPedido, setItensPedido]   = useState<ItemDoPedido[]>([]);
-  const [totalPedido, setTotalPedido]   = useState(0);
+  const [mostrarBotao, setMostrarBotao]       = useState(false);
+  const [progresso, setProgresso]             = useState(100);
+  const [statusAtual, setStatusAtual]         = useState("RECEBIDO");
+  const [itensPedido, setItensPedido]         = useState<ItemDoPedido[]>([]);
+  const [totalPedido, setTotalPedido]         = useState(0);
+  const [metodoPagamento, setMetodoPagamento] = useState<string | undefined>();
 
   const duracaoMs = 5 * 60 * 1000;
   const inicioRef = useRef(Date.now());
@@ -48,6 +49,7 @@ function ConfirmacaoConteudo() {
         setStatusAtual(d.data.status);
         setItensPedido(d.data.itens ?? []);
         setTotalPedido(Number(d.data.total ?? 0));
+        setMetodoPagamento(d.data.pagamento?.metodo ?? undefined);
       })
       .catch(function() {});
 
@@ -95,7 +97,7 @@ function ConfirmacaoConteudo() {
         observacao: item.observacao ?? undefined,
       };
     });
-    imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "CLIENTE" });
+    imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "CLIENTE", metodoPagamento });
     setTimeout(function() {
       imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "COZINHA" });
     }, 1000);

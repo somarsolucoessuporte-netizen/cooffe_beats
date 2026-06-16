@@ -24,6 +24,7 @@ model Empresa {
   usuarios       Usuario[]
   adicionais     Adicional[]
   configuracao   Configuracao?
+  caixas         Caixa[]
 }
 
 model Usuario {
@@ -38,6 +39,7 @@ model Usuario {
 
   empresa Empresa  @relation(fields: [empresaId], references: [id])
   pedidos Pedido[] @relation("PedidoAtendente")
+  caixas  Caixa[]
 }
 
 enum Perfil {
@@ -116,8 +118,11 @@ model Pedido {
   prontoEm     DateTime?
   entregueEm   DateTime?
 
+  caixaId      String?
+
   empresa   Empresa    @relation(fields: [empresaId], references: [id])
   atendente Usuario?   @relation("PedidoAtendente", fields: [atendenteId], references: [id])
+  caixa     Caixa?     @relation(fields: [caixaId], references: [id])
   itens     ItemPedido[]
   pagamento Pagamento?
 }
@@ -194,16 +199,68 @@ enum StatusPagamento {
 model Configuracao {
   id                  String  @id @default(cuid())
   empresaId           String  @unique
+
+  // Operação
   tempoMedioMinutos   Int     @default(5)
   prefixoSenha        String  @default("CB")
   senhaAtual          Int     @default(100)
   mensagemEspera      String  @default("Seu pedido está sendo preparado com carinho ☕")
+
+  // Dados da empresa
+  nomeFantasia        String?
+  razaoSocial         String?
+  cnpj                String?
+  telefone            String?
+  whatsapp            String?
+  emailContato        String?
+  site                String?
+  inscricaoEstadual   String?
+  regimeTributario    String?
+
+  // Endereço
+  endereco            String?
+  numero              String?
+  complemento         String?
+  bairro              String?
+  cidade              String?
+  estado              String?
+  cep                 String?
+
+  // Visual
   logoUrl             String?
   bgUrl               String?
+  corPrimaria         String?
+  corSecundaria       String?
+
+  // Cupom
+  mensagemCupom       String  @default("Obrigado pela preferência! Volte sempre ☕")
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
 
   @@map("configuracoes")
+}
+
+enum StatusCaixa {
+  ABERTO
+  FECHADO
+}
+
+model Caixa {
+  id              String      @id @default(cuid())
+  empresaId       String
+  usuarioId       String
+  status          StatusCaixa @default(ABERTO)
+  valorAbertura   Decimal     @default(0) @db.Decimal(10, 2)
+  valorFechamento Decimal?    @db.Decimal(10, 2)
+  observacao      String?
+  abridoEm        DateTime    @default(now())
+  fechadoEm       DateTime?
+
+  empresa  Empresa  @relation(fields: [empresaId], references: [id])
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+  pedidos  Pedido[]
+
+  @@map("caixas")
 }
 
 model Log {

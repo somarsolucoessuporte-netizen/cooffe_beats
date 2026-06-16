@@ -11,9 +11,11 @@ const NAV_PRINCIPAL = [
 ];
 
 const NAV_GESTAO = [
-  { href: "/admin/produtos",   label: "Produtos",   icone: "🍕", perfis: ["ADMIN", "GERENTE"] },
-  { href: "/admin/categorias", label: "Categorias", icone: "📂", perfis: ["ADMIN", "GERENTE"] },
-  { href: "/admin/usuarios",   label: "Usuários",   icone: "👥", perfis: ["ADMIN"] },
+  { href: "/admin/produtos",       label: "Produtos",       icone: "🍕", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/categorias",     label: "Categorias",     icone: "📂", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/usuarios",       label: "Usuários",       icone: "👥", perfis: ["ADMIN"] },
+  { href: "/admin/configuracoes",  label: "Empresa",        icone: "⚙️", perfis: ["ADMIN"] },
+  { href: "/caixa",               label: "Caixa / Rel.",   icone: "💰", perfis: ["ADMIN", "GERENTE"] },
 ];
 
 export default function PainelSidebar() {

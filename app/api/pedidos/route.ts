@@ -54,6 +54,12 @@ export async function POST(req: NextRequest) {
 
       const senha = `${config.prefixoSenha}-${novaSenha}`;
 
+      // Vincular ao caixa aberto (se existir)
+      const caixaAberto = await tx.caixa.findFirst({
+        where: { empresaId, status: "ABERTO" },
+        select: { id: true },
+      });
+
       // Calcular totais
       const subtotal = itens.reduce((acc, item) => {
         const totalAdicionais = (item.adicionais ?? []).reduce(
@@ -71,6 +77,7 @@ export async function POST(req: NextRequest) {
           subtotal,
           total: subtotal,
           observacao,
+          caixaId: caixaAberto?.id ?? null,
           itens: {
             create: itens.map((item) => ({
               produtoId: item.produtoId,

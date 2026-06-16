@@ -30,6 +30,18 @@ async function main() {
       senhaAtual: 100,
       tempoMedioMinutos: 5,
       mensagemEspera: "Seu pedido está sendo preparado com carinho ☕",
+      mensagemCupom: "Obrigado pela preferência! Volte sempre ☕",
+      nomeFantasia: "Coffee & Beats",
+      razaoSocial: "Coffee & Beats Ltda.",
+      cnpj: "00.000.000/0001-00",
+      telefone: "(11) 99999-0000",
+      whatsapp: "(11) 99999-0000",
+      endereco: "Rua do Café",
+      numero: "100",
+      bairro: "Centro",
+      cidade: "São Paulo",
+      estado: "SP",
+      cep: "01310-100",
     },
   });
 

@@ -38,15 +38,17 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.perfil = (user as { perfil?: string }).perfil;
+        token.perfil    = (user as { perfil?: string }).perfil;
         token.empresaId = (user as { empresaId?: string }).empresaId;
+        token.usuarioId = user.id;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { perfil?: string }).perfil = token.perfil as string;
+        (session.user as { perfil?: string }).perfil       = token.perfil as string;
         (session.user as { empresaId?: string }).empresaId = token.empresaId as string;
+        (session.user as { usuarioId?: string }).usuarioId = token.usuarioId as string;
       }
       return session;
     },
