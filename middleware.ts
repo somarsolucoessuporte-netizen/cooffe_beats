@@ -6,6 +6,10 @@ const PROTECTED_PREFIXES = ["/dashboard", "/pedidos", "/kds", "/admin"];
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  if (pathname.startsWith("/instalar") || pathname === "/fila") {
+    return NextResponse.next();
+  }
+
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
 
