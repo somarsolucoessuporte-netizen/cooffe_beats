@@ -7,6 +7,7 @@
            font-size:16px; border:none; border-radius:8px; cursor:pointer; }
   .ok { background:#16a34a; color:#fff; }
   .info { background:#1d4ed8; color:#fff; }
+  .warn { background:#d97706; color:#fff; }
   pre { background:#222; padding:10px; border-radius:6px;
         font-size:11px; overflow-x:auto; white-space:pre-wrap; }
 </style>
@@ -15,20 +16,76 @@
 <h2>🖨️ Diagnóstico Impressora</h2>
 <div id="status"></div>
 
-<button class="info" onclick="diagnostico()">1. Verificar Plugin</button>
-<button class="ok" onclick="testarImpressao()">2. Imprimir Teste</button>
+<button class="warn" onclick="testarServidor()">0. Testar Servidor Local (localhost:9100)</button>
+<button class="ok"   onclick="imprimirViaHttp()">0b. Imprimir via HTTP (localhost:9100)</button>
+<button class="info" onclick="diagnostico()">1. Verificar Plugin Capacitor</button>
+<button class="ok"   onclick="testarImpressao()">2. Imprimir via Plugin</button>
 <button class="info" onclick="verWindow()">3. Ver window.Capacitor</button>
 
 <pre id="log">Aguardando...</pre>
 
 <script>
+const logEl = document.getElementById('log');
 const log = (msg) => {
-  document.getElementById('log').textContent += '\n' + msg;
+  logEl.textContent += '\n' + msg;
   console.log(msg);
 };
 
+async function testarServidor() {
+  log('--- TESTE SERVIDOR LOCAL ---');
+  log('Testando http://localhost:9100/status ...');
+  try {
+    const r = await fetch('http://localhost:9100/status', {
+      signal: AbortSignal.timeout(3000)
+    });
+    const data = await r.json();
+    log('✅ Servidor OK: ' + JSON.stringify(data));
+  } catch(e) {
+    log('❌ Falhou: ' + e.message);
+    log('Tipo: ' + e.constructor.name);
+    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+      log('→ Servidor não está rodando ou porta bloqueada');
+      log('→ Abra o app CB Print Server e confirme que está verde');
+    } else if (e.message.includes('CORS') || e.message.includes('cors')) {
+      log('→ Problema de CORS — verificar headers do servidor');
+    } else if (e.message.includes('timeout') || e.message.includes('AbortError')) {
+      log('→ Timeout — servidor demorou mais de 3s para responder');
+    } else {
+      log('→ Erro desconhecido: ' + e.name + ' / ' + e.message);
+    }
+  }
+}
+
+async function imprimirViaHttp() {
+  log('--- IMPRESSÃO VIA HTTP ---');
+  log('Enviando POST para http://localhost:9100/print ...');
+  try {
+    const r = await fetch('http://localhost:9100/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        numeroPedido: 'HTML-TEST',
+        itens: [
+          { nome: 'Cafe Expresso', quantidade: 1, preco: 5.00 },
+          { nome: 'Pao de Queijo', quantidade: 2, preco: 8.00 }
+        ],
+        total: 13.00,
+        via: 'CLIENTE',
+        nomeCliente: 'Teste HTML',
+        metodoPagamento: 'PIX'
+      }),
+      signal: AbortSignal.timeout(5000)
+    });
+    const data = await r.json();
+    log('✅ Resultado: ' + JSON.stringify(data));
+  } catch(e) {
+    log('❌ Erro no POST: ' + e.message);
+    log('Tipo: ' + e.constructor.name);
+  }
+}
+
 function diagnostico() {
-  log('--- DIAGNÓSTICO ---');
+  log('--- DIAGNÓSTICO CAPACITOR ---');
   log('window.Capacitor: ' + typeof window.Capacitor);
   log('isNative: ' + window.Capacitor?.isNativePlatform?.());
   log('Plugins: ' + JSON.stringify(Object.keys(window.Capacitor?.Plugins || {})));
@@ -53,7 +110,7 @@ function verWindow() {
 }
 
 async function testarImpressao() {
-  log('--- TESTE IMPRESSÃO ---');
+  log('--- TESTE IMPRESSÃO CAPACITOR ---');
   const P = window.Capacitor?.Plugins?.SunmiPrinter;
   if (!P) {
     log('❌ SunmiPrinter não encontrado');
@@ -78,7 +135,7 @@ async function testarImpressao() {
   }
 }
 
-window.addEventListener('load', () => setTimeout(diagnostico, 500));
+window.addEventListener('load', () => setTimeout(testarServidor, 500));
 </script>
 </body>
 </html>
