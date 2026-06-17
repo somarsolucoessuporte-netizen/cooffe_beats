@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Teste Impressora</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background: #111; color: #fff; }
+  button { display:block; width:100%; padding:16px; margin:8px 0;
+           font-size:16px; border:none; border-radius:8px; cursor:pointer; }
+  .ok { background:#16a34a; color:#fff; }
+  .info { background:#1d4ed8; color:#fff; }
+  pre { background:#222; padding:10px; border-radius:6px;
+        font-size:11px; overflow-x:auto; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<h2>🖨️ Diagnóstico Impressora</h2>
+<div id="status"></div>
+
+<button class="info" onclick="diagnostico()">1. Verificar Plugin</button>
+<button class="ok" onclick="testarImpressao()">2. Imprimir Teste</button>
+<button class="info" onclick="verWindow()">3. Ver window.Capacitor</button>
+
+<pre id="log">Aguardando...</pre>
+
+<script>
+const log = (msg) => {
+  document.getElementById('log').textContent += '\n' + msg;
+  console.log(msg);
+};
+
+function diagnostico() {
+  log('--- DIAGNÓSTICO ---');
+  log('window.Capacitor: ' + typeof window.Capacitor);
+  log('isNative: ' + window.Capacitor?.isNativePlatform?.());
+  log('Plugins: ' + JSON.stringify(Object.keys(window.Capacitor?.Plugins || {})));
+  log('SunmiPrinter: ' + typeof window.Capacitor?.Plugins?.SunmiPrinter);
+
+  try {
+    const { Capacitor } = window;
+    log('Capacitor ok: ' + !!Capacitor);
+  } catch(e) {
+    log('Erro Capacitor: ' + e.message);
+  }
+}
+
+function verWindow() {
+  log('--- WINDOW KEYS ---');
+  const keys = Object.keys(window).filter(k =>
+    k.toLowerCase().includes('sunmi') ||
+    k.toLowerCase().includes('print') ||
+    k.toLowerCase().includes('capacitor')
+  );
+  log(JSON.stringify(keys));
+}
+
+async function testarImpressao() {
+  log('--- TESTE IMPRESSÃO ---');
+  const P = window.Capacitor?.Plugins?.SunmiPrinter;
+  if (!P) {
+    log('❌ SunmiPrinter não encontrado');
+    log('Tentando via CapacitorCustomPlatform...');
+    log(JSON.stringify(window.CapacitorCustomPlatform));
+    return;
+  }
+  try {
+    log('✅ Plugin encontrado, iniciando...');
+    await P.enterPrinterBuffer({ clean: true });
+    await P.setAlignment({ alignment: 'center' });
+    await P.setBold({ enable: true });
+    await P.printText({ text: 'COFFEE & BEATS\n' });
+    await P.printText({ text: 'TESTE OK!\n' });
+    await P.setBold({ enable: false });
+    await P.lineWrap({ lines: 3 });
+    await P.exitPrinterBuffer({ commit: true });
+    log('✅ Impresso com sucesso!');
+  } catch(e) {
+    log('❌ Erro: ' + e.message);
+    log(JSON.stringify(e));
+  }
+}
+
+window.addEventListener('load', () => setTimeout(diagnostico, 500));
+</script>
+</body>
+</html>
