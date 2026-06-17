@@ -6,14 +6,11 @@ import { playClick } from "@/lib/sounds";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
-import { criarCobranca, verificarPagamento } from "@/lib/sumup";
 import { iniciarPagamentoNFC } from "@/lib/sunmi";
 
 type Tela = "escolha" | "pix" | "cartao";
 
-const MODO_SIMULADO = process.env.NEXT_PUBLIC_PAGAMENTO_SIMULADO === "true";
-const SEM_SUMUP     = !process.env.NEXT_PUBLIC_SUMUP_AFFILIATE_KEY;
-const DEMO          = MODO_SIMULADO || SEM_SUMUP;
+const DEMO = process.env.NEXT_PUBLIC_PAGAMENTO_SIMULADO === "true";
 
 const TIMEOUT_PIX_MS   = 10 * 60 * 1000; // 10 minutos
 const POLL_STATUS_MS   = 3000;
@@ -74,7 +71,7 @@ export default function Pagamento() {
   const [carregando, setCarregando] = useState(false);
   const [simulando, setSimulando] = useState(false);
   const [erro, setErro]           = useState<string | null>(null);
-  const [qrCode, setQrCode]       = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [tempoRestante, setTempoRestante] = useState(600); // seg
 
   const pedidoRef  = useRef<{ id: string; senha: string } | null>(null);
@@ -155,14 +152,25 @@ export default function Pagamento() {
     var pollMs = metodoRef.current === "CARTAO" ? POLL_CARTAO_MS : POLL_STATUS_MS;
     pollingRef.current = setInterval(async function() {
       try {
-        var status = await verificarPagamento(checkoutId);
-        if (status.status === "PAID" || status.status === "SUCCESSFUL") {
+        var statusRes  = await fetch("/api/pagamentos/sumup/status/" + checkoutId);
+        var statusData = await statusRes.json();
+        if (statusData.status === "PAID" || statusData.status === "SUCCESSFUL") {
           pararPolling();
           if (pedidoRef.current) {
+            // Registrar pagamento no pedido (fire-and-forget)
+            fetch("/api/pagamentos/simular", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                pedidoId: pedidoRef.current.id,
+                valor:    totalRef.current,
+                metodo:   metodoRef.current,
+              }),
+            }).catch(function() {});
             limparCarrinho();
             router.push("/confirmacao?senha=" + encodeURIComponent(pedidoRef.current.senha) + "&id=" + pedidoRef.current.id);
           }
-        } else if (status.status === "FAILED" || status.status === "EXPIRED") {
+        } else if (statusData.status === "FAILED" || statusData.status === "EXPIRED") {
           pararPolling();
           setErro("Pagamento recusado ou expirado. Tente novamente.");
           setTela("escolha");
@@ -225,17 +233,22 @@ export default function Pagamento() {
       // Modo real: iniciar SumUp
       if (metodo === "CARTAO") iniciarPagamentoNFC(totalValor);
 
-      var checkout = await criarCobranca({
-        valor: totalValor,
-        descricao: "Coffee & Beats – " + pedido.senha,
-        referencia: "CB-" + pedido.senha + "-" + Date.now(),
-        metodo,
+      var cobrancaRes = await fetch("/api/pagamentos/sumup/criar", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valor:     totalValor,
+          descricao: "Coffee & Beats – " + pedido.senha,
+          referencia: "CB-" + pedido.senha + "-" + Date.now(),
+        }),
       });
+      var cobranca = await cobrancaRes.json();
+      if (!cobranca.ok) throw new Error(cobranca.error ?? "Erro ao criar cobrança");
 
-      if (metodo === "PIX" && checkout.qr_code) setQrCode(checkout.qr_code);
+      if (metodo === "PIX") setCheckoutUrl(cobranca.data.checkoutUrl as string);
       setTela(metodo === "PIX" ? "pix" : "cartao");
       setCarregando(false);
-      iniciarPolling(checkout.checkout_id);
+      iniciarPolling(cobranca.data.checkoutId as string);
     } catch(err) {
       setErro(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
       setCarregando(false);
@@ -246,7 +259,7 @@ export default function Pagamento() {
   function voltarEscolha() {
     pararTudo();
     setTela("escolha");
-    setQrCode(null);
+    setCheckoutUrl(null);
     setErro(null);
     setSimulando(false);
     setTempoRestante(600);
@@ -281,10 +294,16 @@ export default function Pagamento() {
                   {simulando ? "Processando..." : "✅ Simular PIX Aprovado"}
                 </button>
               </>
-            ) : qrCode ? (
+            ) : checkoutUrl ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qrCode} alt="QR Code PIX" width={200} height={200} className="rounded-lg" />
+                <img
+                  src={"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + encodeURIComponent(checkoutUrl)}
+                  alt="QR Code PIX"
+                  width={200}
+                  height={200}
+                  className="rounded-lg"
+                />
                 <p className="text-cb-marrom/50 text-sm">Escaneie com o app do banco</p>
                 <div className="flex items-center gap-2 text-cb-marrom/70">
                   <span className="text-sm">Expira em:</span>
