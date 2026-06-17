@@ -12,7 +12,7 @@ export default function Diagnostico() {
     var checks = [
       "SunmiPrinter", "printer", "sunmiPrinter",
       "InnerPrinter", "Android", "SunmiDevice",
-      "JSBridge", "sunmi", "SUNMI",
+      "JSBridge", "sunmi", "SUNMI", "woyouService",
     ];
 
     checks.forEach(function(name) {
@@ -36,12 +36,13 @@ export default function Diagnostico() {
   function testarImpressora() {
     var resultados: string[] = [];
     try {
-      var p = (window as any).SunmiPrinter || (window as any).printer;
+      var p = (window as any).SunmiPrinter || (window as any).printer || (window as any).woyouService;
       if (!p) {
         resultados.push("❌ Impressora SUNMI não encontrada no window");
       } else {
         resultados.push("✅ Objeto impressora encontrado: " + JSON.stringify(Object.keys(p)));
-        p.printText?.("TESTE COFFEE & BEATS\n");
+        p.printerInit?.();
+        p.printText?.("COFFEE & BEATS\nTESTE OK\n\n\n");
         p.lineWrap?.(3);
         resultados.push("✅ Comando printText enviado");
       }
