@@ -91,7 +91,13 @@ function ConfirmacaoConteudo() {
         observacao: item.observacao ?? undefined,
       };
     });
-    imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "CLIENTE", metodoPagamento });
+    var cliente: { nome: string; whatsapp: string } | undefined;
+    try {
+      var clienteNome = sessionStorage.getItem("clienteNome");
+      var clienteWpp  = sessionStorage.getItem("clienteWpp");
+      if (clienteNome) cliente = { nome: clienteNome, whatsapp: clienteWpp ?? "" };
+    } catch(e) { /* sem acesso ao sessionStorage */ }
+    imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "CLIENTE", cliente: cliente, metodoPagamento });
     setTimeout(function() {
       imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "COZINHA" });
     }, 1000);

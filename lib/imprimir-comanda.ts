@@ -69,6 +69,10 @@ export async function imprimirComanda(pedido: {
   }[];
   total: number;
   via: "CLIENTE" | "COZINHA" | "BARISTA";
+  cliente?: {
+    nome: string;
+    whatsapp: string;
+  };
   metodoPagamento?: string;
 }) {
   try {
@@ -140,6 +144,11 @@ export async function imprimirComanda(pedido: {
       '<div class="sep"></div>' +
       '<div class="titulo">' + titulo + '</div>' +
       '<div class="senha">' + pedido.senha + '</div>' +
+      (pedido.cliente
+        ? '<div class="sep"></div>' +
+          '<div><b>Cliente:</b> ' + pedido.cliente.nome + '</div>' +
+          '<div><b>WhatsApp:</b> ' + pedido.cliente.whatsapp + '</div>'
+        : '') +
       '<div class="sep"></div>' +
       itensHtml +
       totalHtml +

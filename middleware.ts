@@ -6,7 +6,7 @@ const PROTECTED_PREFIXES = ["/dashboard", "/pedidos", "/kds", "/admin", "/client
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith("/instalar") || pathname === "/fila") {
+  if (pathname.startsWith("/instalar") || pathname === "/fila" || pathname === "/diagnostico") {
     return NextResponse.next();
   }
 
