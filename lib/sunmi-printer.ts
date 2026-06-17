@@ -26,9 +26,8 @@ export class SunmiPrinter {
     if (!this.isAvailable()) return false;
     try {
       if (this.printer.printText) {
-        linhas.forEach(function(linha: string) {
-          this.printer.printText(linha + "\n");
-        }, this);
+        const p = this.printer;
+        linhas.forEach((linha: string) => { p.printText(linha + "\n"); });
         this.printer.lineWrap?.(3);
         return true;
       }
