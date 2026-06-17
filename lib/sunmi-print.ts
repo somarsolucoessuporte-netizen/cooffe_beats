@@ -1,8 +1,10 @@
-import { Capacitor } from "@capacitor/core";
-import { SunmiPrinter } from "@kduma-autoid/capacitor-sunmi-printer";
-
 export const isNativeApp = (): boolean => {
-  return typeof window !== "undefined" && Capacitor.isNativePlatform();
+  if (typeof window === "undefined") return false;
+  try {
+    return !!(window as any).Capacitor?.isNativePlatform?.();
+  } catch {
+    return false;
+  }
 };
 
 export interface ItemCupom {
@@ -32,9 +34,10 @@ export const printCupom = async (
   }
 
   try {
+    const { SunmiPrinter } = await import("@kduma-autoid/capacitor-sunmi-printer");
+
     await SunmiPrinter.enterPrinterBuffer({ clean: true });
 
-    // === CABEÇALHO ===
     await SunmiPrinter.setAlignment({ alignment: "center" });
     await SunmiPrinter.setBold({ enable: true });
     await SunmiPrinter.setFontSize({ size: 28 });
@@ -49,8 +52,6 @@ export const printCupom = async (
     }
 
     await SunmiPrinter.printText({ text: "================================\n" });
-
-    // === DADOS DO PEDIDO ===
     await SunmiPrinter.setAlignment({ alignment: "left" });
     await SunmiPrinter.setBold({ enable: true });
     await SunmiPrinter.printText({ text: `Pedido: ${cupom.numeroPedido}\n` });
@@ -65,8 +66,6 @@ export const printCupom = async (
     await SunmiPrinter.printText({ text: `Data: ${dataHora}\n` });
     await SunmiPrinter.printText({ text: "--------------------------------\n" });
 
-    // === ITENS ===
-    // Papel 58mm ≈ 32 caracteres por linha
     for (const item of cupom.itens) {
       const nome  = `${item.quantidade}x ${item.nome}`;
       const preco = item.preco != null ? `R$${item.preco.toFixed(2)}` : "";
@@ -79,7 +78,6 @@ export const printCupom = async (
       }
     }
 
-    // === TOTAL ===
     await SunmiPrinter.printText({ text: "================================\n" });
     await SunmiPrinter.setAlignment({ alignment: "right" });
     await SunmiPrinter.setBold({ enable: true });
@@ -104,10 +102,12 @@ export const printCupom = async (
 
     return { success: true };
 
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error("[SUNMI D2P-58] Erro ao imprimir:", err);
-    try { await SunmiPrinter.exitPrinterBuffer({ commit: false }); } catch { /* silencioso */ }
-    const msg = err instanceof Error ? err.message : "Erro desconhecido";
-    return { success: false, error: msg };
+    try {
+      const { SunmiPrinter } = await import("@kduma-autoid/capacitor-sunmi-printer");
+      await SunmiPrinter.exitPrinterBuffer({ commit: false });
+    } catch { /* silencioso */ }
+    return { success: false, error: err?.message || "Erro desconhecido" };
   }
 };
