@@ -1,4 +1,3 @@
-/// <reference types="@kduma-autoid/capacitor-sunmi-printer" />
 import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
