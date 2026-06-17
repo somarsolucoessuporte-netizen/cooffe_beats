@@ -5,6 +5,7 @@ import { playClick } from "@/lib/sounds";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { imprimirComanda } from "@/lib/imprimir-comanda";
+import { printCupom } from "@/lib/sunmi-print";
 
 const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }> = {
   RECEBIDO:   { icone: "⏳", texto: "Recebido",                cor: "text-cb-amber" },
@@ -97,10 +98,35 @@ function ConfirmacaoConteudo() {
       var clienteWpp  = sessionStorage.getItem("clienteWpp");
       if (clienteNome) cliente = { nome: clienteNome, whatsapp: clienteWpp ?? "" };
     } catch(e) { /* sem acesso ao sessionStorage */ }
+    // Impressão browser (iframe / window.print)
     imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "CLIENTE", cliente: cliente, metodoPagamento });
     setTimeout(function() {
       imprimirComanda({ senha: senha, itens: itens, total: totalPedido, via: "COZINHA" });
     }, 1000);
+
+    // Impressão nativa SUNMI D2P-58 (Capacitor — fire-and-forget)
+    var nativItens = itens.map(function(i) {
+      var nomeComAdicionais = i.adicionais && i.adicionais.length > 0
+        ? i.nome + " + " + i.adicionais.join(", ")
+        : i.nome;
+      return { nome: nomeComAdicionais, quantidade: i.quantidade, observacao: i.observacao };
+    });
+    printCupom({
+      numeroPedido: senha,
+      itens: nativItens,
+      total: totalPedido,
+      nomeCliente: cliente?.nome,
+      metodoPagamento: metodoPagamento,
+      via: "CLIENTE",
+    }).catch(function() {});
+    setTimeout(function() {
+      printCupom({
+        numeroPedido: senha,
+        itens: nativItens,
+        total: totalPedido,
+        via: "COZINHA",
+      }).catch(function() {});
+    }, 500);
   }
 
   var info = STATUS_INFO[statusAtual] ?? STATUS_INFO.RECEBIDO;
