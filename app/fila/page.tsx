@@ -64,9 +64,9 @@ export default function FilaDeSenhas() {
   var prontos   = pedidos.filter(function(p) { return p.status === "PRONTO"; });
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#3B2415" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "#F5ECD7" }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-10 py-5 border-b border-white/10">
+      <div className="flex items-center justify-between px-10 py-5 border-b" style={{ background: "#EDE0C4", borderColor: "#D4C4A0" }}>
         <div className="flex items-center gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Coffee & Beats" className="h-12 object-contain" />
@@ -79,7 +79,7 @@ export default function FilaDeSenhas() {
               conexao === "erro" ? "bg-red-400 animate-pulse" :
               "bg-yellow-400 animate-pulse"
             }`} />
-            <span className="text-white/30 text-xs">
+            <span className="text-xs" style={{ color: "#7A6A55" }}>
               {conexao === "ok" ? "ao vivo" : conexao === "erro" ? "offline" : "conectando"}
             </span>
           </div>
@@ -90,7 +90,7 @@ export default function FilaDeSenhas() {
       </div>
 
       {/* Grid de senhas */}
-      <div className="flex-1 grid grid-cols-2 divide-x divide-white/10">
+      <div className="flex-1 grid grid-cols-2 divide-x" style={{ borderColor: "#D4C4A0" }}>
         {/* EM PREPARO */}
         <div className="p-8 flex flex-col gap-6">
           <div className="flex items-center gap-3 mb-2">
@@ -100,14 +100,14 @@ export default function FilaDeSenhas() {
               Em Preparo
             </h2>
             {emPreparo.length > 0 && (
-              <span className="ml-auto text-white/30 text-sm font-mono">
+              <span className="ml-auto text-sm font-mono" style={{ color: "#7A6A55" }}>
                 {emPreparo.length}
               </span>
             )}
           </div>
 
           {emPreparo.length === 0 ? (
-            <p className="text-white/20 text-lg">Nenhum pedido</p>
+            <p className="text-lg" style={{ color: "#7A6A55" }}>Nenhum pedido</p>
           ) : (
             <div className="flex flex-wrap gap-4">
               {emPreparo.map(function(p) {
@@ -138,14 +138,14 @@ export default function FilaDeSenhas() {
               Pronto — Retire aqui!
             </h2>
             {prontos.length > 0 && (
-              <span className="ml-auto text-white/30 text-sm font-mono">
+              <span className="ml-auto text-sm font-mono" style={{ color: "#7A6A55" }}>
                 {prontos.length}
               </span>
             )}
           </div>
 
           {prontos.length === 0 ? (
-            <p className="text-white/20 text-lg">Nenhum pedido</p>
+            <p className="text-lg" style={{ color: "#7A6A55" }}>Nenhum pedido</p>
           ) : (
             <div className="flex flex-wrap gap-4">
               {prontos.map(function(p) {
@@ -170,8 +170,8 @@ export default function FilaDeSenhas() {
       </div>
 
       {/* Footer */}
-      <div className="text-center py-4 border-t border-white/10">
-        <p className="text-white/20 text-sm tracking-widest uppercase">
+      <div className="text-center py-4 border-t" style={{ borderColor: "#D4C4A0" }}>
+        <p className="text-sm tracking-widest uppercase" style={{ color: "#7A6A55" }}>
           Acompanhe seu pedido nessa tela
         </p>
       </div>
