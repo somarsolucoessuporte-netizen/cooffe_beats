@@ -99,6 +99,16 @@ body {
   animation: fade-in 0.4s ease-out forwards;
 }
 
+/* Botão flutuante Finalizar Pedido */
+@keyframes pulse-float {
+  0%, 100% { transform: scale(1);    box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  50%       { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+}
+
+.btn-float-cart {
+  animation: pulse-float 1.5s ease-in-out infinite;
+}
+
 /* Pulso suave no botão de carrinho quando tem itens */
 @keyframes pulse-cart {
   0%, 100% { transform: scale(1); }

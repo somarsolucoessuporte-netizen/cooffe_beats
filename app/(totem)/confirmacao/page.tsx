@@ -38,17 +38,20 @@ function ConfirmacaoConteudo() {
   const [metodoPagamento, setMetodoPagamento] = useState<string | undefined>();
   const [nomeCliente, setNomeCliente]         = useState<string | undefined>();
   const [telefoneCliente, setTelefoneCliente] = useState<string | undefined>();
+  const [isMesa, setIsMesa]                   = useState(false);
 
   const duracaoMs = 5 * 60 * 1000;
   const inicioRef = useRef(Date.now());
 
-  // Lê dados do cliente do sessionStorage no mount
+  // Lê dados do cliente e modo mesa do sessionStorage no mount
   useEffect(function() {
     try {
-      var nome = sessionStorage.getItem("clienteNome") ?? undefined;
-      var tel  = sessionStorage.getItem("clienteWpp")  ?? undefined;
-      if (nome) setNomeCliente(nome);
-      if (tel)  setTelefoneCliente(tel.replace(/\D/g, ""));
+      var nome  = sessionStorage.getItem("clienteNome") ?? undefined;
+      var tel   = sessionStorage.getItem("clienteWpp")  ?? undefined;
+      var mesa  = sessionStorage.getItem("mesaId")      ?? "";
+      if (nome)  setNomeCliente(nome);
+      if (tel)   setTelefoneCliente(tel.replace(/\D/g, ""));
+      if (mesa)  setIsMesa(true);
     } catch(e) {}
   }, []);
 
@@ -80,9 +83,10 @@ function ConfirmacaoConteudo() {
   }, [pedidoId]);
 
   useEffect(function() {
-    var t = setTimeout(function() { router.push("/"); }, 30000);
+    var destino = isMesa ? "/cardapio" : "/";
+    var t = setTimeout(function() { router.push(destino); }, 30000);
     return function() { clearTimeout(t); };
-  }, [router]);
+  }, [router, isMesa]);
 
   useEffect(function() {
     var interval = setInterval(function() {
@@ -182,19 +186,21 @@ function ConfirmacaoConteudo() {
 
       {/* Botões de ação — navegação */}
       <div className="flex gap-4 mt-2">
-        <button
-          onClick={function() { playClick(); router.push("/"); }}
-          className="bg-cb-marrom text-cb-bege font-extrabold font-sans text-lg
-                     py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
-        >
-          🏠 Início
-        </button>
+        {!isMesa && (
+          <button
+            onClick={function() { playClick(); router.push("/"); }}
+            className="bg-cb-marrom text-cb-bege font-extrabold font-sans text-lg
+                       py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
+          >
+            🏠 Início
+          </button>
+        )}
         <button
           onClick={function() { playClick(); router.push("/cardapio"); }}
           className="bg-cb-amber text-white font-extrabold font-sans text-lg
                      py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
         >
-          ☕ Novo Pedido
+          {isMesa ? "☕ Fazer mais pedidos" : "☕ Novo Pedido"}
         </button>
       </div>
 

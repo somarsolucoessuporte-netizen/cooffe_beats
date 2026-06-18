@@ -25,12 +25,23 @@ export default function MesaPage({ params }: { params: Promise<{ mesaId: string 
   const [salvando, setSalvando] = useState(false);
 
   useEffect(function() {
+    // Se já existe sessão válida para esta mesa, vai direto ao cardápio
+    try {
+      var existingMesa    = sessionStorage.getItem("mesaId") ?? "";
+      var existingCliente = sessionStorage.getItem("clienteId") ?? "";
+      var expiry          = Number(sessionStorage.getItem("mesaSessionExpiry") ?? "0");
+      if (existingMesa === mesaId && existingCliente && (!expiry || Date.now() < expiry)) {
+        router.replace("/cardapio");
+        return;
+      }
+    } catch(e) {}
+
     // Busca dados da mesa
     fetch("/api/admin/mesas/" + mesaId + "/info")
       .then(function(r) { return r.json(); })
       .then(function(d) { if (d.ok) setMesa(d.data); })
       .catch(function() {});
-  }, [mesaId]);
+  }, [mesaId, router]);
 
   function pular() {
     playClick();
