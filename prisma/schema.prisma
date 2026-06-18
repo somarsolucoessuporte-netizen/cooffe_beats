@@ -139,6 +139,8 @@ enum StatusPedido {
   PRONTO
   ENTREGUE
   CANCELADO
+  COMANDA_ABERTA
+  AGUARDANDO_PAGAMENTO
 }
 
 enum Origem {
@@ -287,12 +289,13 @@ model Cliente {
 }
 
 model Mesa {
-  id        String  @id @default(cuid())
-  empresaId String
-  numero    Int
-  nome      String?
-  qrCode    String?
-  ativo     Boolean @default(true)
+  id            String  @id @default(cuid())
+  empresaId     String
+  numero        Int
+  nome          String?
+  qrCode        String?
+  ativo         Boolean @default(true)
+  modoPagamento String  @default("hora")
 
   empresa Empresa  @relation(fields: [empresaId], references: [id])
   pedidos Pedido[]

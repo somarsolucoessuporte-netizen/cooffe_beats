@@ -18,8 +18,9 @@ export async function PATCH(
   const atualizada = await prisma.mesa.update({
     where: { id },
     data: {
-      nome:  body.nome  ?? undefined,
-      ativo: body.ativo ?? undefined,
+      nome:          body.nome          ?? undefined,
+      ativo:         body.ativo         ?? undefined,
+      modoPagamento: body.modoPagamento ?? undefined,
     },
   });
 

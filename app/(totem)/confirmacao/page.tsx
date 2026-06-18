@@ -7,10 +7,12 @@ import { supabase } from "@/lib/supabase";
 import { printCupom } from "@/lib/sunmi-print";
 
 const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }> = {
-  RECEBIDO:   { icone: "⏳", texto: "Recebido",                cor: "text-cb-amber" },
-  EM_PREPARO: { icone: "☕", texto: "Preparando seu pedido...", cor: "text-blue-500" },
-  PRONTO:     { icone: "🎉", texto: "Pronto! Retire no balcão", cor: "text-green-500" },
-  ENTREGUE:   { icone: "✅", texto: "Entregue. Bom proveito!",  cor: "text-cb-marrom/50" },
+  RECEBIDO:             { icone: "⏳", texto: "Recebido",                         cor: "text-cb-amber" },
+  EM_PREPARO:           { icone: "☕", texto: "Preparando seu pedido...",          cor: "text-blue-500" },
+  PRONTO:               { icone: "🎉", texto: "Pronto! Retire no balcão",          cor: "text-green-500" },
+  ENTREGUE:             { icone: "✅", texto: "Entregue. Bom proveito!",           cor: "text-cb-marrom/50" },
+  COMANDA_ABERTA:       { icone: "🪑", texto: "Anotado na comanda!",               cor: "text-cb-amber" },
+  AGUARDANDO_PAGAMENTO: { icone: "💳", texto: "Aguardando pagamento no balcão",    cor: "text-blue-500" },
 };
 
 const impressaoAtiva = process.env.NEXT_PUBLIC_IMPRESSAO_ATIVA !== "false";
@@ -25,8 +27,9 @@ interface ItemDoPedido {
 function ConfirmacaoConteudo() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const senha    = searchParams.get("senha") ?? "CB-???";
-  const pedidoId = searchParams.get("id")    ?? "";
+  const senha    = searchParams.get("senha")   ?? "CB-???";
+  const pedidoId = searchParams.get("id")     ?? "";
+  const isComanda = searchParams.get("comanda") === "1";
 
   const [progresso, setProgresso]             = useState(100);
   const [statusAtual, setStatusAtual]         = useState("RECEBIDO");
@@ -195,8 +198,19 @@ function ConfirmacaoConteudo() {
         </button>
       </div>
 
-      {/* Escolha do comprovante */}
-      {impressaoAtiva && itensPedido.length > 0 && (
+      {/* Comanda: mensagem de orientação */}
+      {isComanda && (
+        <div className="bg-cb-amber/10 border border-cb-amber/30 rounded-2xl px-6 py-4 text-center max-w-sm w-full">
+          <p className="text-cb-marrom font-bold text-base">🪑 Comanda aberta</p>
+          <p className="text-cb-marrom/60 text-sm mt-1">
+            Pague ao balcão quando quiser sair.<br />
+            Pode pedir mais itens quando quiser!
+          </p>
+        </div>
+      )}
+
+      {/* Escolha do comprovante — apenas no modo normal (não comanda) */}
+      {!isComanda && impressaoAtiva && itensPedido.length > 0 && (
         <div className="flex gap-4 w-full max-w-sm">
           {telefoneCliente && (
             <button

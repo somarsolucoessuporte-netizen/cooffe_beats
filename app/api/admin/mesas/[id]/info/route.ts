@@ -10,7 +10,7 @@ export async function GET(
 
   const mesa = await prisma.mesa.findUnique({
     where: { id },
-    select: { numero: true, nome: true, ativo: true },
+    select: { numero: true, nome: true, ativo: true, modoPagamento: true },
   });
 
   if (!mesa || !mesa.ativo) return erroResposta("Mesa não encontrada", 404);

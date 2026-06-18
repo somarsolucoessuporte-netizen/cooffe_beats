@@ -26,6 +26,7 @@ const CriarPedidoSchema = z.object({
   observacao: z.string().optional(),
   clienteId: z.string().optional(),
   mesaId: z.string().optional(),
+  status: z.enum(["RECEBIDO", "COMANDA_ABERTA"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       return erroResposta(validacao.error.message);
     }
 
-    const { empresaId, itens, observacao, clienteId, mesaId } = validacao.data;
+    const { empresaId, itens, observacao, clienteId, mesaId, status } = validacao.data;
 
     const pedido = await prisma.$transaction(async (tx) => {
       // Gerar senha sequencial
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
         data: {
           empresaId,
           senha,
+          status:    status ?? "RECEBIDO",
           subtotal,
           total: subtotal,
           observacao,

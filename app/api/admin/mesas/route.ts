@@ -11,10 +11,22 @@ export async function GET() {
   const mesas = await prisma.mesa.findMany({
     where: { empresaId },
     orderBy: { numero: "asc" },
-    include: { _count: { select: { pedidos: true } } },
+    include: {
+      _count: { select: { pedidos: true } },
+      pedidos: {
+        where: { status: "COMANDA_ABERTA" },
+        select: { total: true },
+      },
+    },
   });
 
-  return resposta(mesas);
+  const resultado = mesas.map(function(m) {
+    const comandaTotal = m.pedidos.reduce(function(sum, p) { return sum + Number(p.total); }, 0);
+    const { pedidos: _, ...rest } = m;
+    return { ...rest, comandaTotal };
+  });
+
+  return resposta(resultado);
 }
 
 export async function POST(req: Request) {
