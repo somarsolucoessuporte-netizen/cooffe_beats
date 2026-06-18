@@ -33,11 +33,23 @@ function ConfirmacaoConteudo() {
   const [itensPedido, setItensPedido]         = useState<ItemDoPedido[]>([]);
   const [totalPedido, setTotalPedido]         = useState(0);
   const [metodoPagamento, setMetodoPagamento] = useState<string | undefined>();
+  const [nomeCliente, setNomeCliente]         = useState<string | undefined>();
+  const [telefoneCliente, setTelefoneCliente] = useState<string | undefined>();
 
   const duracaoMs = 5 * 60 * 1000;
   const inicioRef = useRef(Date.now());
 
-  // Busca status + dados do pedido (sem impressão automática)
+  // Lê dados do cliente do sessionStorage no mount
+  useEffect(function() {
+    try {
+      var nome = sessionStorage.getItem("clienteNome") ?? undefined;
+      var tel  = sessionStorage.getItem("clienteWpp")  ?? undefined;
+      if (nome) setNomeCliente(nome);
+      if (tel)  setTelefoneCliente(tel.replace(/\D/g, ""));
+    } catch(e) {}
+  }, []);
+
+  // Busca dados do pedido
   useEffect(function() {
     if (!pedidoId) return;
 
@@ -57,9 +69,7 @@ function ConfirmacaoConteudo() {
       .channel("empresa-" + empresaId)
       .on("broadcast", { event: "pedido:atualizado" }, function(msg) {
         var payload = msg.payload as { id: string; status: string };
-        if (payload.id === pedidoId) {
-          setStatusAtual(payload.status);
-        }
+        if (payload.id === pedidoId) setStatusAtual(payload.status);
       })
       .subscribe();
 
@@ -81,50 +91,44 @@ function ConfirmacaoConteudo() {
     return function() { clearInterval(interval); };
   }, [duracaoMs]);
 
-  async function handleImprimir() {
-    playClick();
-    var itens = itensPedido.map(function(item) {
+  function buildItens() {
+    return itensPedido.map(function(item) {
+      var adds = item.adicionais.map(function(a) { return a.adicional.nome; });
       return {
-        nome: item.produto.nome,
+        nome: adds.length > 0 ? item.produto.nome + " + " + adds.join(", ") : item.produto.nome,
         quantidade: item.quantidade,
-        adicionais: item.adicionais.map(function(a) { return a.adicional.nome; }),
         observacao: item.observacao ?? undefined,
       };
     });
-    var cliente: { nome: string; whatsapp: string } | undefined;
-    try {
-      var clienteNome = sessionStorage.getItem("clienteNome");
-      var clienteWpp  = sessionStorage.getItem("clienteWpp");
-      if (clienteNome) cliente = { nome: clienteNome, whatsapp: clienteWpp ?? "" };
-    } catch(e) { /* sem acesso ao sessionStorage */ }
+  }
 
-    var nativItens = itens.map(function(i) {
-      var nomeComAdicionais = i.adicionais && i.adicionais.length > 0
-        ? i.nome + " + " + i.adicionais.join(", ")
-        : i.nome;
-      return { nome: nomeComAdicionais, quantidade: i.quantidade, observacao: i.observacao };
-    });
+  function handleWhatsApp() {
+    playClick();
+    var itens = buildItens();
 
-    var resultado = await printCupom({
-      numeroPedido: senha,
-      itens: nativItens,
-      total: totalPedido,
-      nomeCliente: cliente?.nome,
-      metodoPagamento: metodoPagamento,
-      via: "CLIENTE",
-    });
-    if (!resultado.success) {
-      alert("Impressao falhou: " + resultado.error);
-      return;
-    }
+    // Imprime via COZINHA fire and forget
+    printCupom({ numeroPedido: senha, itens, total: totalPedido, via: "COZINHA" })
+      .catch(function() {});
+
+    // Monta texto do comprovante
+    var linhasItens = itens.map(function(i) { return i.quantidade + "x " + i.nome; }).join("\n");
+    var totalFmt    = "R$" + totalPedido.toFixed(2).replace(".", ",");
+    var texto = "☕ Coffee & Beats\nPedido: " + senha + "\n" + linhasItens + "\nTotal: " + totalFmt + "\nObrigado!";
+    var url   = "https://wa.me/55" + telefoneCliente + "?text=" + encodeURIComponent(texto);
+    window.open(url, "_blank");
+  }
+
+  function handleImprimir() {
+    playClick();
+    var itens = buildItens();
+
+    printCupom({ numeroPedido: senha, itens, total: totalPedido,
+                 nomeCliente: nomeCliente, metodoPagamento: metodoPagamento, via: "CLIENTE" })
+      .catch(function() {});
 
     setTimeout(function() {
-      printCupom({
-        numeroPedido: senha,
-        itens: nativItens,
-        total: totalPedido,
-        via: "COZINHA",
-      }).catch(function() {});
+      printCupom({ numeroPedido: senha, itens, total: totalPedido, via: "COZINHA" })
+        .catch(function() {});
     }, 500);
   }
 
@@ -173,7 +177,7 @@ function ConfirmacaoConteudo() {
 
       <p className="text-cb-marrom/50 text-base">Previsão: ~5 minutos</p>
 
-      {/* Botões de ação — visíveis imediatamente */}
+      {/* Botões de ação — navegação */}
       <div className="flex gap-4 mt-2">
         <button
           onClick={function() { playClick(); router.push("/"); }}
@@ -191,15 +195,30 @@ function ConfirmacaoConteudo() {
         </button>
       </div>
 
-      {/* Botão de impressão manual (operador) */}
+      {/* Escolha do comprovante */}
       {impressaoAtiva && itensPedido.length > 0 && (
-        <button
-          onClick={handleImprimir}
-          className="text-cb-marrom/40 text-sm border border-cb-marrom/20 rounded-full px-5 py-2
-                     hover:border-cb-marrom/50 hover:text-cb-marrom/70 transition-colors"
-        >
-          🖨️ Imprimir Comanda
-        </button>
+        <div className="flex gap-4 w-full max-w-sm">
+          {telefoneCliente && (
+            <button
+              onClick={handleWhatsApp}
+              className="flex-1 flex flex-col items-center gap-2 bg-[#F5ECD7] border-2 border-[#16a34a]
+                         rounded-2xl px-4 py-5 touch-manipulation active:scale-95 transition-transform"
+            >
+              <span className="text-4xl">📱</span>
+              <span className="font-bold text-[#16a34a] text-sm leading-tight">Receber no</span>
+              <span className="font-bold text-[#16a34a] text-sm leading-tight">WhatsApp</span>
+            </button>
+          )}
+          <button
+            onClick={handleImprimir}
+            className="flex-1 flex flex-col items-center gap-2 bg-[#F5ECD7] border-2 border-[#3B2415]
+                       rounded-2xl px-4 py-5 touch-manipulation active:scale-95 transition-transform"
+          >
+            <span className="text-4xl">🖨️</span>
+            <span className="font-bold text-[#3B2415] text-sm leading-tight">Imprimir</span>
+            <span className="font-bold text-[#3B2415] text-sm leading-tight">aqui</span>
+          </button>
+        </div>
       )}
     </main>
   );
