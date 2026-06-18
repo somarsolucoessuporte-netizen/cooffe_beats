@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <rect width="1920" height="1080" fill="#3B1F0E"/>
+  <!-- Círculo decorativo de fundo -->
+  <circle cx="960" cy="540" r="320" fill="#4A2A10" opacity="0.6"/>
+  <circle cx="960" cy="540" r="260" fill="#5C3318" opacity="0.4"/>
+  <!-- Ícone de xícara de café -->
+  <text x="960" y="500" font-size="180" text-anchor="middle" dominant-baseline="middle" fill="#C8853A">☕</text>
+  <!-- Nome -->
+  <text x="960" y="640" font-size="72" font-family="Arial, sans-serif" font-weight="900"
+        text-anchor="middle" fill="#F6F0E5" letter-spacing="6">Coffee &amp; Beats</text>
+  <!-- Subtítulo -->
+  <text x="960" y="710" font-size="28" font-family="Arial, sans-serif" font-weight="400"
+        text-anchor="middle" fill="#C8853A" letter-spacing="12">TOTEM DE PEDIDOS</text>
+  <!-- Placeholder note (invisível na imagem final) -->
+  <!-- SUBSTITUIR ESTE SVG POR PNG COM O LOGO OFICIAL -->
+  <!-- Somar Soluções Digitais -->
+  <text x="960" y="1050" font-size="20" font-family="Arial, sans-serif"
+        text-anchor="middle" fill="#5C3318">Somar Soluções Digitais · coffeebeats.somar.ia.br</text>
+</svg>

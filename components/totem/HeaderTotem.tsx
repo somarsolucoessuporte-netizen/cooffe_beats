@@ -34,8 +34,8 @@ export default function HeaderTotem({ mostrarVoltar = true }: HeaderTotemProps) 
 
       <button
         onClick={() => { playClick(); router.push("/carrinho"); }}
-        className="relative flex items-center gap-2 bg-white/15 px-3 py-2 rounded-xl
-                   touch-manipulation btn-totem"
+        className={`relative flex items-center gap-2 bg-white/15 px-3 py-2 rounded-xl
+                    touch-manipulation btn-totem btn-carrinho${totalItens > 0 ? " com-itens" : ""}`}
       >
         <span className="text-lg">🛒</span>
         <span className="font-sans text-cb-bege font-medium text-sm">Carrinho</span>

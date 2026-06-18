@@ -1,4 +1,4 @@
-# Gerar APK para SUNMI D2 Mini
+# Coffee & Beats — App Android (Capacitor)
 
 ## Pré-requisitos
 
@@ -45,3 +45,25 @@ Para apontar para outro servidor, edite `server.url` em `capacitor.config.ts`.
 - `bindOnLoad: true` → conecta automaticamente na D2P-58 ao abrir o app  
 - Suporta buffer de impressão (`enterPrinterBuffer` / `exitPrinterBuffer`)  
 - API completa: texto, alinhamento, negrito, tamanho de fonte, avanço de papel
+
+## Auto-start no boot
+
+O `BootReceiver.kt` em `android/app/src/main/java/br/com/somar/coffeebeats/BootReceiver.kt`
+lança a `MainActivity` automaticamente após o boot do dispositivo.
+
+Para configurar como app padrão de inicialização no D2 Mini (Francisco):
+- **Settings → Sunmi Settings → Default Launch App → Coffee & Beats**
+- Isso faz o sistema lançar o app antes mesmo do BootReceiver
+
+## Papel de parede (wallpaper) com logo
+
+Para aplicar o wallpaper com o logo Coffee & Beats no D2 Mini:
+
+1. Gerar/obter a imagem: fundo `#3B1F0E` com logo centralizado (ex. 1920×1080px)
+2. Transferir via ADB:
+   ```bash
+   adb -s DM04228F40426 push logo-wallpaper.png /sdcard/Pictures/
+   ```
+3. No D2 Mini: **Configurações → Papel de parede → Galeria → selecionar a imagem**
+
+Placeholder salvo em `../public/wallpaper-coffee-beats.svg`.
