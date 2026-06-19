@@ -165,10 +165,59 @@ export default function Home() {
         )}
 
         {fase >= 3 && (
-          <div className="slide-up flex flex-col items-center gap-4">
+          <div className="slide-up flex flex-col items-center gap-5">
+            {/* Ícones de acesso rápido */}
+            <div className="flex gap-7 justify-center flex-wrap">
+              {/* Cardápio */}
+              <button
+                onClick={irParaCardapio}
+                className="flex flex-col items-center gap-2 touch-manipulation active:scale-95 transition-transform"
+              >
+                <div
+                  className="w-24 h-24 rounded-full bg-[#F5ECD7] flex items-center justify-center p-4"
+                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.png" alt="Cardápio" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-sm text-[#E8D9BD]">Cardápio</span>
+              </button>
+
+              {/* Visor de Pedidos */}
+              <button
+                onClick={function() { playClick(); router.push("/fila"); }}
+                className="flex flex-col items-center gap-2 touch-manipulation active:scale-95 transition-transform"
+              >
+                <div
+                  className="w-24 h-24 rounded-full bg-[#F5ECD7] flex items-center justify-center p-4"
+                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.png" alt="Visor de Pedidos" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-sm text-[#E8D9BD]">Visor de Pedidos</span>
+              </button>
+
+              {/* Admin */}
+              <button
+                onClick={function() { playClick(); router.push("/pedidos"); }}
+                className="flex flex-col items-center gap-2 touch-manipulation active:scale-95 transition-transform"
+              >
+                <div
+                  className="w-24 h-24 rounded-full bg-[#F5ECD7] flex items-center justify-center p-4"
+                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.png" alt="Admin" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-sm text-[#E8D9BD]">Admin</span>
+              </button>
+            </div>
+
+            {/* Botão principal */}
             <button
               onClick={irParaCardapio}
-              className="mt-2 bg-cb-marrom text-cb-bege font-extrabold font-sans text-2xl
+              className="mt-1 bg-cb-marrom text-cb-bege font-extrabold font-sans text-2xl
                          py-6 px-16 rounded-full min-h-[80px]
                          touch-manipulation btn-totem cta-pulse"
             >
