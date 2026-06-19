@@ -174,6 +174,14 @@ export default function Home() {
             >
               FAZER PEDIDO
             </button>
+            <button
+              onClick={function() { playClick(); router.push("/agendar"); }}
+              className="bg-transparent border-2 border-amber-800/30 text-amber-800/60
+                         font-bold font-sans text-base py-3 px-10 rounded-full
+                         touch-manipulation hover:border-amber-800/50 transition-colors"
+            >
+              📅 Agendar Mesa
+            </button>
             <p className="text-amber-700/60 text-sm">Toque em qualquer lugar para começar</p>
           </div>
         )}
