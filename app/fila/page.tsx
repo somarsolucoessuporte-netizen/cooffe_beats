@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 interface PedidoFila {
@@ -10,6 +11,7 @@ interface PedidoFila {
 }
 
 export default function FilaDeSenhas() {
+  const router    = useRouter();
   const empresaId = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
   const [pedidos, setPedidos] = useState<PedidoFila[]>([]);
   const [hora, setHora]       = useState("");
@@ -68,6 +70,18 @@ export default function FilaDeSenhas() {
       {/* Header */}
       <div className="flex items-center justify-between px-10 py-5 border-b" style={{ background: "#EDE0C4", borderColor: "#D4C4A0" }}>
         <div className="flex items-center gap-4">
+          <button
+            onClick={function() { router.push("/"); }}
+            className="flex items-center justify-center w-10 h-10 rounded-full
+                       hover:bg-black/10 transition-colors touch-manipulation"
+            title="Voltar"
+            style={{ color: "#3B2415" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Coffee & Beats" className="h-12 object-contain" />
         </div>

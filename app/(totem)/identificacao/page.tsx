@@ -84,9 +84,23 @@ function IdentificacaoConteudo() {
 
   return (
     <div
-      className="h-screen w-screen flex flex-col items-center justify-center px-8 select-none"
+      className="h-screen w-screen flex flex-col select-none"
       style={{ background: "#F6F0E5" }}
     >
+      {/* Botão voltar */}
+      <button
+        onClick={function() { router.push("/"); }}
+        className="absolute top-4 left-4 flex items-center gap-1.5 text-[#3B2415] touch-manipulation
+                   active:scale-95 transition-transform p-2"
+        title="Voltar"
+      >
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M14 17L8 11L14 5" stroke="currentColor" strokeWidth="2.2"
+                strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-8">
       <div className="w-full max-w-sm flex flex-col items-center gap-6 animate-fadeIn">
         {/* Logo */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -164,6 +178,7 @@ function IdentificacaoConteudo() {
         >
           Pular identificação
         </button>
+      </div>
       </div>
     </div>
   );

@@ -180,7 +180,7 @@ export default function Home() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/logo.png" alt="Cardápio" className="w-full h-full object-contain" />
                 </div>
-                <span className="text-sm text-[#E8D9BD]">Cardápio</span>
+                <span className="text-sm font-medium text-[#3B2415]">Cardápio</span>
               </button>
 
               {/* Visor de Pedidos */}
@@ -195,7 +195,7 @@ export default function Home() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/logo.png" alt="Visor de Pedidos" className="w-full h-full object-contain" />
                 </div>
-                <span className="text-sm text-[#E8D9BD]">Visor de Pedidos</span>
+                <span className="text-sm font-medium text-[#3B2415]">Visor de Pedidos</span>
               </button>
 
               {/* Admin */}
@@ -210,7 +210,7 @@ export default function Home() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/logo.png" alt="Admin" className="w-full h-full object-contain" />
                 </div>
-                <span className="text-sm text-[#E8D9BD]">Admin</span>
+                <span className="text-sm font-medium text-[#3B2415]">Admin</span>
               </button>
             </div>
 
