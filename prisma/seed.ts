@@ -338,6 +338,25 @@ async function main() {
   });
 
   console.log("✅ Usuários criados");
+
+  // Canais de Venda
+  const canaisData = [
+    { id: "canal-totem",    nome: "Totem",     tipo: "interno",          ativo: true  },
+    { id: "canal-mesa",     nome: "Mesa",      tipo: "interno",          ativo: true  },
+    { id: "canal-ifood",    nome: "iFood",     tipo: "delivery_externo", ativo: false },
+    { id: "canal-99food",   nome: "99Food",    tipo: "delivery_externo", ativo: false },
+    { id: "canal-ubereats", nome: "Uber Eats", tipo: "delivery_externo", ativo: false },
+  ];
+
+  for (const canal of canaisData) {
+    await prisma.canalVenda.upsert({
+      where:  { id: canal.id },
+      update: {},
+      create: canal,
+    });
+  }
+
+  console.log("✅ Canais de venda criados");
   console.log(`\n🚀 Seed concluído!`);
   console.log(`   Empresa ID: ${empresa.id}`);
   console.log(`   Admin: admin@coffeeandbeats.com / admin123`);
