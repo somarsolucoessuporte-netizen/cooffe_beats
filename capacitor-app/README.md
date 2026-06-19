@@ -67,3 +67,87 @@ Para aplicar o wallpaper com o logo Coffee & Beats no D2 Mini:
 3. No D2 Mini: **Configurações → Papel de parede → Galeria → selecionar a imagem**
 
 Placeholder salvo em `../public/wallpaper-coffee-beats.svg`.
+
+## Acesso remoto via Tailscale
+
+**Status:** Tailscale 1.98.4 instalado no D2 Mini (`DM04228F40426`) em 2026-06-18.  
+**Login pendente:** Francisco deve fazer login com a conta Somar.IA no D2 Mini.
+
+### Setup inicial (uma vez)
+
+**No D2 Mini:**
+1. Abrir o app **Tailscale** (já instalado)
+2. Fazer login com a conta Google/e-mail da Somar.IA
+3. O dispositivo aparece como "DM04228F40426" na tailnet
+
+**No notebook de suporte:**
+1. Instalar Tailscale: `winget install Tailscale.Tailscale`
+2. Fazer login com a **mesma conta** da Somar.IA
+3. Verificar dispositivos: `tailscale status`
+
+### Conectar remotamente (sem USB)
+
+```powershell
+$adb = "C:\Users\einst\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+
+# 1. Ver IP Tailscale do D2 Mini (algo como 100.x.x.x)
+tailscale status
+
+# 2. Conectar via ADB sobre Tailscale
+& $adb connect 100.x.x.x:5555
+
+# 3. Verificar conexão
+& $adb devices
+
+# 4. Usar normalmente (instalar APK, ver logs, etc.)
+& $adb -s 100.x.x.x:5555 install -r app-debug.apk
+& $adb -s 100.x.x.x:5555 logcat -s PrintServer
+```
+
+### Reativar ADB TCP/IP após reinicialização
+
+O ADB TCP/IP não persiste após reboot. Opções:
+
+**Opção A — via USB (necessário estar presencialmente):**
+```powershell
+& $adb -s DM04228F40426 tcpip 5555
+```
+
+**Opção B — via Tailscale já conectado (sem USB):**
+```powershell
+# Se já está conectado remotamente, reconectar após reboot:
+& $adb connect 100.x.x.x:5555   # pode funcionar se o D2 manteve tcpip
+```
+
+**Opção C — app ShizukuRunner ou similar com persistência** *(avançado)*:  
+Requer root ou modo de depuração permanente — não recomendado para produção.
+
+> **Recomendação prática:** Na primeira visita ao cliente, habilitar ADB TCP/IP via USB  
+> (`adb tcpip 5555`) e anotar o IP Tailscale. Basta refazer isso se o device reiniciar.
+
+### IP local atual (rede WiFi do cliente)
+
+```
+192.168.15.7:5555
+```
+*(pode mudar se o roteador reatribuir DHCP — usar IP Tailscale é mais confiável)*
+
+### Referência rápida de comandos remotos
+
+```powershell
+$t = "100.x.x.x"  # IP Tailscale do D2 Mini
+
+# Instalar APK
+& $adb connect "${t}:5555"
+& $adb -s "${t}:5555" install -r path/to/app.apk
+
+# Ver logs do Print Server
+& $adb -s "${t}:5555" logcat -s PrintServer:D HttpPrintServer:D
+
+# Reiniciar o app Coffee & Beats
+& $adb -s "${t}:5555" shell am force-stop br.com.somar.coffeebeats
+& $adb -s "${t}:5555" shell am start -n br.com.somar.coffeebeats/.MainActivity
+
+# Port-forward para debug local
+& $adb -s "${t}:5555" forward tcp:9100 tcp:9100
+```
