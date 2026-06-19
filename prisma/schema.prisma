@@ -120,17 +120,22 @@ model Pedido {
   prontoEm     DateTime?
   entregueEm   DateTime?
 
-  caixaId      String?
-  clienteId    String?
-  mesaId       String?
+  caixaId       String?
+  clienteId     String?
+  mesaId        String?
+  cupomId       String?
+  valorDesconto Decimal?  @db.Decimal(10, 2)
+  canalVendaId  String?
 
-  empresa   Empresa    @relation(fields: [empresaId], references: [id])
-  atendente Usuario?   @relation("PedidoAtendente", fields: [atendenteId], references: [id])
-  caixa     Caixa?     @relation(fields: [caixaId], references: [id])
-  cliente   Cliente?   @relation(fields: [clienteId], references: [id])
-  mesa      Mesa?      @relation(fields: [mesaId], references: [id])
-  itens     ItemPedido[]
-  pagamento Pagamento?
+  empresa    Empresa     @relation(fields: [empresaId], references: [id])
+  atendente  Usuario?    @relation("PedidoAtendente", fields: [atendenteId], references: [id])
+  caixa      Caixa?      @relation(fields: [caixaId], references: [id])
+  cliente    Cliente?    @relation(fields: [clienteId], references: [id])
+  mesa       Mesa?       @relation(fields: [mesaId], references: [id])
+  cupom      Cupom?      @relation(fields: [cupomId], references: [id])
+  canalVenda CanalVenda? @relation(fields: [canalVendaId], references: [id])
+  itens      ItemPedido[]
+  pagamento  Pagamento?
 }
 
 enum StatusPedido {
@@ -297,10 +302,73 @@ model Mesa {
   ativo         Boolean @default(true)
   modoPagamento String  @default("hora")
 
-  empresa Empresa  @relation(fields: [empresaId], references: [id])
-  pedidos Pedido[]
+  empresa      Empresa       @relation(fields: [empresaId], references: [id])
+  pedidos      Pedido[]
+  agendamentos Agendamento[]
 
   @@map("mesas")
+}
+
+model Cupom {
+  id           String    @id @default(cuid())
+  codigo       String    @unique
+  tipo         String    // "percentual" | "valor_fixo"
+  valor        Float
+  ativo        Boolean   @default(true)
+  usoMaximo    Int?
+  usoAtual     Int       @default(0)
+  validoAte    DateTime?
+  pedidoMinimo Float?
+  criadoEm     DateTime  @default(now())
+
+  pedidos Pedido[]
+
+  @@map("cupons")
+}
+
+model CarrinhoAbandonado {
+  id            String   @id @default(cuid())
+  empresaId     String
+  nomeCliente   String?
+  telefone      String?
+  mesaId        String?
+  itensJson     Json
+  totalEstimado Decimal  @db.Decimal(10, 2)
+  recuperado    Boolean  @default(false)
+  criadoEm      DateTime @default(now())
+
+  @@map("carrinhos_abandonados")
+}
+
+model Agendamento {
+  id          String   @id @default(cuid())
+  empresaId   String
+  nomeCliente String
+  telefone    String
+  data        DateTime
+  duracao     Int      @default(60)
+  pessoas     Int      @default(1)
+  mesaId      String?
+  observacao  String?
+  status      String   @default("PENDENTE")
+  criadoEm    DateTime @default(now())
+
+  mesa Mesa? @relation(fields: [mesaId], references: [id])
+
+  @@map("agendamentos")
+}
+
+model CanalVenda {
+  id         String   @id @default(cuid())
+  nome       String
+  tipo       String   // "interno" | "delivery_externo"
+  ativo      Boolean  @default(false)
+  configJson Json?
+  criadoEm   DateTime @default(now())
+
+  pedidos Pedido[]
+
+  @@map("canais_venda")
 }
 
 model Log {

@@ -16,6 +16,48 @@ export default function Carrinho() {
   const [enviando, setEnviando]                     = useState(false);
   const [erroComanda, setErroComanda]               = useState("");
 
+  // Cupom
+  const [cupomCodigo,    setCupomCodigo]    = useState("");
+  const [cupomAtivo,     setCupomAtivo]     = useState<{ id: string; codigo: string; desconto: number } | null>(null);
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
+  const [erroCupom,      setErroCupom]      = useState("");
+
+  var totalComDesconto = cupomAtivo ? Math.max(0, totalValor - cupomAtivo.desconto) : totalValor;
+
+  async function aplicarCupom() {
+    if (!cupomCodigo.trim()) return;
+    setAplicandoCupom(true);
+    setErroCupom("");
+    try {
+      var r = await fetch("/api/cupons/validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigo: cupomCodigo.trim().toUpperCase(), valorPedido: totalValor }),
+      });
+      var d = await r.json();
+      if (d.ok) {
+        setCupomAtivo({ id: d.data.cupom.id, codigo: d.data.cupom.codigo, desconto: d.data.desconto });
+        try {
+          sessionStorage.setItem("cupomId",      d.data.cupom.id);
+          sessionStorage.setItem("cupomDesconto", String(d.data.desconto));
+        } catch(e) {}
+      } else {
+        setErroCupom(d.error ?? "Cupom inválido");
+      }
+    } catch(e) {
+      setErroCupom("Erro ao verificar cupom");
+    } finally {
+      setAplicandoCupom(false);
+    }
+  }
+
+  function removerCupom() {
+    setCupomAtivo(null);
+    setCupomCodigo("");
+    setErroCupom("");
+    try { sessionStorage.removeItem("cupomId"); sessionStorage.removeItem("cupomDesconto"); } catch(e) {}
+  }
+
   const temCafe = itens.some(function(i) {
     return i.nome.toLowerCase().includes("café") || i.nome.toLowerCase().includes("espresso") ||
            i.nome.toLowerCase().includes("cappuccino") || i.nome.toLowerCase().includes("latte");
@@ -59,8 +101,10 @@ export default function Carrinho() {
       var body = {
         empresaId,
         status: "COMANDA_ABERTA",
-        mesaId:    mesaId    || undefined,
-        clienteId: clienteId || undefined,
+        mesaId:        mesaId        || undefined,
+        clienteId:     clienteId     || undefined,
+        cupomId:       cupomAtivo?.id      || undefined,
+        valorDesconto: cupomAtivo?.desconto || undefined,
         itens: itens.map(function(item) {
           return {
             produtoId: item.produtoId,
@@ -224,10 +268,51 @@ export default function Carrinho() {
 
       {/* Rodapé */}
       <div className="shrink-0 bg-white border-t border-cb-marrom/10 p-6 flex flex-col gap-4">
+        {/* Cupom */}
+        {!cupomAtivo ? (
+          <div className="flex flex-col gap-1">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={cupomCodigo}
+                onChange={function(e) { setCupomCodigo(e.target.value.toUpperCase()); setErroCupom(""); }}
+                placeholder="Tem um cupom?"
+                className="flex-1 border border-cb-marrom/20 rounded-xl px-4 py-3 text-cb-marrom
+                           text-sm bg-cb-bege focus:outline-none focus:border-cb-amber uppercase
+                           tracking-wider placeholder:normal-case"
+              />
+              <button
+                onClick={aplicarCupom}
+                disabled={aplicandoCupom || !cupomCodigo.trim()}
+                className="bg-cb-amber text-white font-bold text-sm px-5 py-3 rounded-xl
+                           disabled:opacity-50 touch-manipulation"
+              >
+                {aplicandoCupom ? "..." : "Aplicar"}
+              </button>
+            </div>
+            {erroCupom && <p className="text-red-500 text-xs px-1">{erroCupom}</p>}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">
+            <div>
+              <span className="text-green-700 font-bold text-sm">🎫 {cupomAtivo.codigo}</span>
+              <span className="text-green-600 text-xs ml-2">−{formatarMoeda(cupomAtivo.desconto)}</span>
+            </div>
+            <button onClick={removerCupom} className="text-red-400 text-xs touch-manipulation px-1">✕</button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
-          <span className="text-cb-marrom/70 text-lg">Total</span>
+          {cupomAtivo ? (
+            <div>
+              <p className="text-cb-marrom/50 text-sm line-through">{formatarMoeda(totalValor)}</p>
+              <span className="text-cb-marrom/70 text-sm">Total com desconto</span>
+            </div>
+          ) : (
+            <span className="text-cb-marrom/70 text-lg">Total</span>
+          )}
           <span className="font-sans font-extrabold text-3xl text-cb-marrom">
-            {formatarMoeda(totalValor)}
+            {formatarMoeda(totalComDesconto)}
           </span>
         </div>
         <div className="flex gap-4">
@@ -272,9 +357,15 @@ export default function Carrinho() {
                   </div>
                 );
               })}
+              {cupomAtivo && (
+                <div className="flex justify-between text-sm text-green-600 border-t border-cb-marrom/10 pt-2 mt-1">
+                  <span>🎫 Desconto ({cupomAtivo.codigo})</span>
+                  <span>−{formatarMoeda(cupomAtivo.desconto)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-extrabold text-cb-marrom border-t border-cb-marrom/10 pt-2 mt-1">
                 <span>Total da comanda</span>
-                <span>{formatarMoeda(totalValor)}</span>
+                <span>{formatarMoeda(totalComDesconto)}</span>
               </div>
             </div>
 

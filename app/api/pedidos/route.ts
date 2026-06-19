@@ -21,12 +21,15 @@ const ItemSchema = z.object({
 });
 
 const CriarPedidoSchema = z.object({
-  empresaId: z.string(),
-  itens: z.array(ItemSchema).min(1),
-  observacao: z.string().optional(),
-  clienteId: z.string().optional(),
-  mesaId: z.string().optional(),
-  status: z.enum(["RECEBIDO", "COMANDA_ABERTA"]).optional(),
+  empresaId:     z.string(),
+  itens:         z.array(ItemSchema).min(1),
+  observacao:    z.string().optional(),
+  clienteId:     z.string().optional(),
+  mesaId:        z.string().optional(),
+  status:        z.enum(["RECEBIDO", "COMANDA_ABERTA"]).optional(),
+  cupomId:       z.string().optional(),
+  valorDesconto: z.number().optional(),
+  canalVendaId:  z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
       return erroResposta(validacao.error.message);
     }
 
-    const { empresaId, itens, observacao, clienteId, mesaId, status } = validacao.data;
+    const { empresaId, itens, observacao, clienteId, mesaId, status, cupomId, valorDesconto, canalVendaId } = validacao.data;
 
     const pedido = await prisma.$transaction(async (tx) => {
       // Gerar senha sequencial
@@ -73,18 +76,29 @@ export async function POST(req: NextRequest) {
         return acc + (item.precoUnit + totalAdicionais) * item.quantidade;
       }, 0);
 
+      const desconto = valorDesconto ?? 0;
+      const total    = Math.max(0, subtotal - desconto);
+
+      // Incrementar uso do cupom dentro da transação
+      if (cupomId) {
+        await tx.cupom.update({ where: { id: cupomId }, data: { usoAtual: { increment: 1 } } });
+      }
+
       // Criar pedido com itens
       const novoPedido = await tx.pedido.create({
         data: {
           empresaId,
           senha,
-          status:    status ?? "RECEBIDO",
+          status:        status ?? "RECEBIDO",
           subtotal,
-          total: subtotal,
+          total,
           observacao,
-          caixaId:   caixaAberto?.id ?? null,
-          clienteId: clienteId ?? null,
-          mesaId:    mesaId    ?? null,
+          caixaId:       caixaAberto?.id ?? null,
+          clienteId:     clienteId      ?? null,
+          mesaId:        mesaId         ?? null,
+          cupomId:       cupomId        ?? null,
+          valorDesconto: desconto > 0 ? desconto : null,
+          canalVendaId:  canalVendaId   ?? null,
           itens: {
             create: itens.map((item) => ({
               produtoId: item.produtoId,
