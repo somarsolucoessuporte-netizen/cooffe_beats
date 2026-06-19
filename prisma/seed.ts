@@ -47,12 +47,15 @@ async function main() {
 
   // Categorias
   const categoriasData = [
-    { nome: "Cafés", emoji: "☕", ordem: 1 },
-    { nome: "Bebidas Geladas", emoji: "🥤", ordem: 2 },
-    { nome: "Bolos", emoji: "🍰", ordem: 3 },
-    { nome: "Salgados", emoji: "🥐", ordem: 4 },
-    { nome: "Sobremesas", emoji: "🍫", ordem: 5 },
-    { nome: "Combos", emoji: "🎁", ordem: 6 },
+    { nome: "Cafés",          emoji: "☕", ordem: 1 },
+    { nome: "Bebidas Geladas",emoji: "🥤", ordem: 2 },
+    { nome: "Bolos",          emoji: "🍰", ordem: 3 },
+    { nome: "Salgados",       emoji: "🥐", ordem: 4 },
+    { nome: "Sobremesas",     emoji: "🍫", ordem: 5 },
+    { nome: "Combos",         emoji: "🎁", ordem: 6 },
+    { nome: "Massas",         emoji: "🍝", ordem: 7 },
+    { nome: "Vinhos",         emoji: "🍷", ordem: 8 },
+    { nome: "Souvenirs",      emoji: "🛍️", ordem: 9 },
   ];
 
   const categorias: Record<string, string> = {};
