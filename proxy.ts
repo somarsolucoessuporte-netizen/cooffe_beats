@@ -19,7 +19,7 @@ export async function proxy(req: NextRequest) {
 
   // ── Rotas web do cliente (/web/*) → Supabase Auth ──────────────────────
   if (pathname.startsWith("/web")) {
-    if (pathname === "/web/login") return NextResponse.next();
+    if (pathname === "/web/login" || pathname === "/web/termos") return NextResponse.next();
 
     let response = NextResponse.next({ request: req });
 
