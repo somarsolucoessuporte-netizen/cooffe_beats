@@ -25,15 +25,36 @@ interface Pedido {
   criadoEm: string;
   iniciadoEm: string | null;
   observacao: string | null;
+  origem: string;
+  previsaoChegada: string | null;
+  pago: boolean;
+  pagamentoAntecipado: boolean;
   itens: ItemPedido[];
 }
 
 function corCard(pedido: Pedido): string {
+  // Pedidos online: urgência baseada na previsão de chegada do cliente
+  if (pedido.origem === "APP" && pedido.previsaoChegada) {
+    const minRestantes = (new Date(pedido.previsaoChegada).getTime() - Date.now()) / 60_000;
+    if (minRestantes < 0)  return "border-red-400 bg-red-900/25";   // passou do horário
+    if (minRestantes <= 15) return "border-amber-400 bg-amber-900/15"; // menos de 15min
+  }
+  // Pedidos normais: baseado no tempo desde início do preparo
   const inicio = pedido.iniciadoEm ?? pedido.criadoEm;
   const diffMin = (Date.now() - new Date(inicio).getTime()) / 60_000;
-  if (diffMin < 5) return "border-green-500 bg-green-900/10";
+  if (diffMin < 5)  return "border-green-500 bg-green-900/10";
   if (diffMin < 10) return "border-yellow-500 bg-yellow-900/10";
   return "border-red-500 bg-red-900/15";
+}
+
+function infoChegadaKDS(pedido: Pedido): string | null {
+  if (pedido.origem !== "APP" || !pedido.previsaoChegada) return null;
+  const chegada    = new Date(pedido.previsaoChegada);
+  const minFaltam  = Math.round((chegada.getTime() - Date.now()) / 60_000);
+  const horaFmt    = chegada.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (minFaltam < 0)  return `⚠ Devia chegar às ${horaFmt} (${Math.abs(minFaltam)}min atrás)`;
+  if (minFaltam === 0) return `Cliente chegando agora!`;
+  return `Chega às ${horaFmt} (${minFaltam}min)`;
 }
 
 export default function KDS() {
@@ -144,6 +165,20 @@ export default function KDS() {
                 key={`${pedido.id}-${tick}`}
                 className={`border-2 rounded-2xl p-5 flex flex-col gap-4 ${corCard(pedido)}`}
               >
+                {/* Badges pedido online */}
+                {pedido.origem === "APP" && (
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
+                      📱 Online
+                    </span>
+                    {pedido.pago && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+                        ✓ Pago
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Header */}
                 <div className="flex items-start justify-between">
                   <span className="font-mono font-bold text-cb-amber text-3xl">{pedido.senha}</span>
@@ -160,6 +195,19 @@ export default function KDS() {
                     </p>
                   </div>
                 </div>
+
+                {/* Previsão de chegada (pedidos online) */}
+                {infoChegadaKDS(pedido) && (
+                  <div className={`text-xs font-medium px-2.5 py-1.5 rounded-lg ${
+                    (new Date(pedido.previsaoChegada!).getTime() - Date.now()) < 0
+                      ? "bg-red-500/20 text-red-300"
+                      : (new Date(pedido.previsaoChegada!).getTime() - Date.now()) < 15 * 60_000
+                        ? "bg-amber-500/20 text-amber-300"
+                        : "bg-zinc-700 text-zinc-300"
+                  }`}>
+                    🕐 {infoChegadaKDS(pedido)}
+                  </div>
+                )}
 
                 {/* Itens */}
                 <div className="flex flex-col gap-2 flex-1">

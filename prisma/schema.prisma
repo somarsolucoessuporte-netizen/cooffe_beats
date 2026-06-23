@@ -127,6 +127,11 @@ model Pedido {
   valorDesconto Decimal?  @db.Decimal(10, 2)
   canalVendaId  String?
 
+  // Portal web: pagamento antecipado e previsão de chegada
+  previsaoChegada     DateTime?
+  pago                Boolean  @default(false)
+  pagamentoAntecipado Boolean  @default(false)
+
   empresa    Empresa     @relation(fields: [empresaId], references: [id])
   atendente  Usuario?    @relation("PedidoAtendente", fields: [atendenteId], references: [id])
   caixa      Caixa?      @relation(fields: [caixaId], references: [id])
@@ -247,6 +252,13 @@ model Configuracao {
 
   // Cupom
   mensagemCupom       String  @default("Obrigado pela preferência! Volte sempre ☕")
+
+  // SumUp — pagamento online no portal web
+  sumupClientId      String?
+  sumupClientSecret  String?
+  sumupMerchantCode  String?
+  sumupAffiliateKey  String?
+  sumupOnlineAtivo   Boolean @default(false)
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
 
@@ -370,6 +382,22 @@ model CanalVenda {
   pedidos Pedido[]
 
   @@map("canais_venda")
+}
+
+model CheckoutSessao {
+  id              String    @id @default(cuid())
+  clienteId       String
+  empresaId       String
+  itensJson       Json
+  total           Decimal   @db.Decimal(10, 2)
+  previsaoChegada DateTime
+  sumupCheckoutId String?   @unique
+  status          String    @default("PENDENTE") // PENDENTE | PAGO | EXPIRADO | FALHOU
+  pedidoId        String?   @unique
+  expiresAt       DateTime
+  criadoEm        DateTime  @default(now())
+
+  @@map("checkout_sessoes")
 }
 
 model Log {

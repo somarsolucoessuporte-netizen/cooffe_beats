@@ -18,6 +18,9 @@ interface Pedido {
   status: string;
   total: string;
   criadoEm: string;
+  origem: string;
+  previsaoChegada: string | null;
+  pago: boolean;
   itens: ItemPedido[];
 }
 
@@ -285,6 +288,25 @@ export default function Pedidos() {
                       <span className="font-mono font-bold text-cb-amber text-lg">{pedido.senha}</span>
                       <span className="text-xs text-zinc-500">{calcularTempoDecorrido(pedido.criadoEm)}</span>
                     </div>
+                    {/* Badges pedido online */}
+                    {pedido.origem === "APP" && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
+                          📱 Online
+                        </span>
+                        {pedido.pago && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+                            ✓ Pago
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* Previsão de chegada */}
+                    {pedido.previsaoChegada && (
+                      <p className="text-xs text-zinc-400">
+                        🕐 Chega às {new Date(pedido.previsaoChegada).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    )}
                     <div className="flex flex-col gap-1">
                       {pedido.itens.slice(0, 3).map((item) => (
                         <p key={item.id} className="text-sm text-zinc-300">

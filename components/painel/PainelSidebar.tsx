@@ -15,7 +15,7 @@ const NAV_CLIENTES = [
   { href: "/dashboard", label: "Dashboard",   icone: "📊", perfis: ["ADMIN", "GERENTE"] },
 ];
 
-const NAV_GESTAO = [
+const NAV_GESTAO: { href: string; label: string; icone: string; perfis?: string[]; exact?: boolean }[] = [
   { href: "/admin/produtos",       label: "Produtos",       icone: "🍕", perfis: ["ADMIN", "GERENTE"] },
   { href: "/admin/categorias",     label: "Categorias",     icone: "📂", perfis: ["ADMIN", "GERENTE"] },
   { href: "/admin/mesas",          label: "Mesas",          icone: "🪑", perfis: ["ADMIN", "GERENTE"] },
@@ -23,8 +23,9 @@ const NAV_GESTAO = [
   { href: "/admin/agendamentos",   label: "Agendamentos",   icone: "📅", perfis: ["ADMIN", "GERENTE"] },
   { href: "/admin/recuperacao",    label: "Recuperação",    icone: "🛒", perfis: ["ADMIN", "GERENTE"] },
   { href: "/admin/canais",         label: "Canais de Venda",icone: "🚀", perfis: ["ADMIN", "GERENTE"] },
-  { href: "/admin/usuarios",       label: "Usuários",       icone: "👥", perfis: ["ADMIN"] },
-  { href: "/admin/configuracoes",  label: "Empresa",        icone: "⚙️", perfis: ["ADMIN"] },
+  { href: "/admin/usuarios",                label: "Usuários",    icone: "👥", perfis: ["ADMIN"] },
+  { href: "/admin/configuracoes/pagamento", label: "Pagamentos",  icone: "💳", perfis: ["ADMIN"] },
+  { href: "/admin/configuracoes",           label: "Empresa",     icone: "⚙️", perfis: ["ADMIN"], exact: true },
 ];
 
 export default function PainelSidebar() {
@@ -36,9 +37,9 @@ export default function PainelSidebar() {
 
   const podeVer = (perfis?: string[]) => !perfis || perfis.includes(perfil);
 
-  const linkClass = (href: string) =>
+  const linkClass = (href: string, exact = false) =>
     `flex items-center gap-3 px-4 py-2.5 rounded-xl font-sans font-medium text-sm transition-colors ${
-      pathname.startsWith(href)
+      (exact ? pathname === href : pathname.startsWith(href))
         ? "bg-[#C8853A] text-[#F6F0E5]"
         : "text-[#F6F0E5]/70 hover:text-[#F6F0E5] hover:bg-white/10"
     }`;
@@ -96,7 +97,7 @@ export default function PainelSidebar() {
               <p className="text-[10px] font-bold text-[#F6F0E5]/40 uppercase tracking-widest">Gestão</p>
             </div>
             {NAV_GESTAO.filter((item) => podeVer(item.perfis)).map((item) => (
-              <Link key={item.href} href={item.href} className={linkClass(item.href)}>
+              <Link key={item.href} href={item.href} className={linkClass(item.href, item.exact)}>
                 <span className="text-lg">{item.icone}</span>
                 {item.label}
               </Link>
