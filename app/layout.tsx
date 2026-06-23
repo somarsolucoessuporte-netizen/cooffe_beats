@@ -18,7 +18,15 @@ export const metadata: Metadata = {
   title: "Coffee & Beats",
   description: "Autoatendimento Coffee & Beats",
   manifest: "/manifest-totem.json",
-  icons: { icon: "/logo.png" },
+  icons: {
+    icon:             "/favicon.ico",
+    shortcut:         "/favicon.ico",
+    apple:            "/apple-touch-icon.png",
+    other: [
+      { rel: "icon", type: "image/png", sizes: "32x32",  url: "/icon.png" },
+      { rel: "icon", type: "image/png", sizes: "192x192", url: "/favicon-192.png" },
+    ],
+  },
 };
 
 export default function RootLayout({
