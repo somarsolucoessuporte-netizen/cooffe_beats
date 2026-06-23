@@ -27,6 +27,9 @@ model Empresa {
   caixas         Caixa[]
   clientes       Cliente[]
   mesas          Mesa[]
+  insumos        Insumo[]
+  movimentacoes  MovimentacaoEstoque[]
+  inventarios    Inventario[]
 }
 
 model Usuario {
@@ -76,10 +79,11 @@ model Produto {
   ordem       Int      @default(0)
   criadoEm    DateTime @default(now())
 
-  empresa    Empresa            @relation(fields: [empresaId], references: [id])
-  categoria  Categoria          @relation(fields: [categoriaId], references: [id])
-  adicionais ProdutoAdicional[]
-  itensPedido ItemPedido[]
+  empresa      Empresa            @relation(fields: [empresaId], references: [id])
+  categoria    Categoria          @relation(fields: [categoriaId], references: [id])
+  adicionais   ProdutoAdicional[]
+  itensPedido  ItemPedido[]
+  fichaTecnica FichaTecnicaItem[]
 }
 
 model Adicional {
@@ -408,4 +412,93 @@ model Log {
   criadoEm  DateTime @default(now())
 
   @@map("logs")
+}
+
+// ══════════════════════════════════════════════════════
+// Módulo de Estoque
+// ══════════════════════════════════════════════════════
+
+model Insumo {
+  id              String   @id @default(cuid())
+  empresaId       String
+  nome            String
+  unidade         String   // kg, L, g, ml, un, cx, ...
+  estoqueAtual    Decimal  @default(0) @db.Decimal(10, 3)
+  estoqueMinimo   Decimal  @default(0) @db.Decimal(10, 3)
+  percentualPerda Decimal  @default(3) @db.Decimal(5, 2)  // % de perda aceitável no inventário
+  custo           Decimal  @default(0) @db.Decimal(10, 4) // custo por unidade
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  empresa       Empresa               @relation(fields: [empresaId], references: [id])
+  fichaTecnica  FichaTecnicaItem[]
+  movimentacoes MovimentacaoEstoque[]
+  inventarios   InventarioItem[]
+
+  @@map("insumos")
+}
+
+model FichaTecnicaItem {
+  id         String  @id @default(cuid())
+  produtoId  String
+  insumoId   String
+  quantidade Decimal @db.Decimal(10, 4) // quantidade do insumo por unidade vendida do produto
+
+  produto Produto @relation(fields: [produtoId], references: [id])
+  insumo  Insumo  @relation(fields: [insumoId], references: [id])
+
+  @@unique([produtoId, insumoId])
+  @@map("ficha_tecnica_itens")
+}
+
+model MovimentacaoEstoque {
+  id         String   @id @default(cuid())
+  empresaId  String
+  insumoId   String
+  tipo       String   // ENTRADA | SAIDA | AJUSTE | PERDA
+  quantidade Decimal  @db.Decimal(10, 4)
+  custo      Decimal? @db.Decimal(10, 4) // custo total desta movimentação
+  origem     String   // COMPRA | VENDA | INVENTARIO | MANUAL | NFE
+  pedidoId   String?
+  nfeChave   String?  // chave de acesso da NF-e
+  observacao String?
+  criadoPor  String?
+  createdAt  DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  insumo  Insumo  @relation(fields: [insumoId], references: [id])
+
+  @@map("movimentacoes_estoque")
+}
+
+model Inventario {
+  id           String    @id @default(cuid())
+  empresaId    String
+  status       String    @default("ABERTO") // ABERTO | FINALIZADO
+  observacao   String?
+  criadoPor    String?
+  createdAt    DateTime  @default(now())
+  finalizadoEm DateTime?
+
+  empresa Empresa         @relation(fields: [empresaId], references: [id])
+  itens   InventarioItem[]
+
+  @@map("inventarios")
+}
+
+model InventarioItem {
+  id             String  @id @default(cuid())
+  inventarioId   String
+  insumoId       String
+  estoqueTeorico Decimal @db.Decimal(10, 4) // estoque esperado no momento do inventário
+  estoqueReal    Decimal @default(0) @db.Decimal(10, 4) // contagem física
+  variacao       Decimal @default(0) @db.Decimal(10, 4) // real - teorico
+  variacaoPerc   Decimal @default(0) @db.Decimal(8, 2)  // (variacao / teorico) * 100
+  dentro         Boolean @default(true) // se variação está dentro do percentualPerda do insumo
+
+  inventario Inventario @relation(fields: [inventarioId], references: [id])
+  insumo     Insumo     @relation(fields: [insumoId], references: [id])
+
+  @@map("inventario_itens")
 }

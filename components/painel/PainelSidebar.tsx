@@ -15,6 +15,15 @@ const NAV_CLIENTES = [
   { href: "/dashboard", label: "Dashboard",   icone: "📊", perfis: ["ADMIN", "GERENTE"] },
 ];
 
+const NAV_ESTOQUE: { href: string; label: string; icone: string; perfis?: string[] }[] = [
+  { href: "/admin/estoque",              label: "Dashboard",      icone: "📦", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/estoque/insumos",      label: "Insumos",        icone: "🧂", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/estoque/ficha-tecnica",label: "Ficha Técnica",  icone: "📋", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/estoque/inventario",   label: "Inventário",     icone: "🔢", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/estoque/nfe",          label: "Importar NF-e",  icone: "🧾", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/admin/estoque/relatorios",   label: "Relatórios / CMV", icone: "📊", perfis: ["ADMIN", "GERENTE"] },
+];
+
 const NAV_GESTAO: { href: string; label: string; icone: string; perfis?: string[]; exact?: boolean }[] = [
   { href: "/admin/produtos",       label: "Produtos",       icone: "🍕", perfis: ["ADMIN", "GERENTE"] },
   { href: "/admin/categorias",     label: "Categorias",     icone: "📂", perfis: ["ADMIN", "GERENTE"] },
@@ -82,6 +91,21 @@ export default function PainelSidebar() {
               <p className="text-[10px] font-bold text-[#F6F0E5]/40 uppercase tracking-widest">Clientes</p>
             </div>
             {NAV_CLIENTES.filter((item) => podeVer(item.perfis)).map((item) => (
+              <Link key={item.href} href={item.href} className={linkClass(item.href)}>
+                <span className="text-lg">{item.icone}</span>
+                {item.label}
+              </Link>
+            ))}
+          </>
+        )}
+
+        {/* Estoque */}
+        {podeVer(["ADMIN", "GERENTE"]) && (
+          <>
+            <div className="mt-4 mb-1 px-4">
+              <p className="text-[10px] font-bold text-[#F6F0E5]/40 uppercase tracking-widest">Estoque</p>
+            </div>
+            {NAV_ESTOQUE.filter((item) => podeVer(item.perfis)).map((item) => (
               <Link key={item.href} href={item.href} className={linkClass(item.href)}>
                 <span className="text-lg">{item.icone}</span>
                 {item.label}

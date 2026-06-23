@@ -159,6 +159,14 @@ export async function POST(req: NextRequest) {
       payload: pedido,
     });
 
+    // Baixa automática de estoque — fire-and-forget, não bloqueia a resposta
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+    fetch(`${baseUrl}/api/admin/estoque/baixa-automatica`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ pedidoId: pedido.id }),
+    }).catch(function () {}); // ignora erros silenciosamente
+
     return resposta(pedido, 201);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao criar pedido";
