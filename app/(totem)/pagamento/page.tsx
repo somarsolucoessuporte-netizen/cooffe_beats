@@ -80,7 +80,7 @@ export default function Pagamento() {
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const totalRef   = useRef(totalValor);
   totalRef.current = totalValor;
-  const metodoRef  = useRef<"PIX" | "CARTAO">("PIX");
+  const metodoRef  = useRef<"PIX" | "CARTAO" | "DINHEIRO">("PIX");
 
   // Limpa timers ao desmontar
   useEffect(function() {
@@ -251,6 +251,31 @@ export default function Pagamento() {
       iniciarPolling(cobranca.data.checkoutId as string);
     } catch(err) {
       setErro(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
+      setCarregando(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregando, itens, totalValor, criarPedido]);
+
+  // Pagamento em dinheiro: cria pedido + registra DINHEIRO + vai direto para confirmação
+  const selecionarDinheiro = useCallback(async function() {
+    if (carregando || itens.length === 0) return;
+    playClick();
+    setCarregando(true);
+    setErro(null);
+    try {
+      var pedido = await criarPedido();
+      pedidoRef.current = pedido;
+
+      await fetch("/api/pagamentos/dinheiro", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ pedidoId: pedido.id, valor: totalValor }),
+      });
+
+      limparCarrinho();
+      router.push("/confirmacao?senha=" + encodeURIComponent(pedido.senha) + "&id=" + pedido.id);
+    } catch(err) {
+      setErro(err instanceof Error ? err.message : "Erro ao processar pagamento em dinheiro");
       setCarregando(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -459,15 +484,18 @@ export default function Pagamento() {
             <span className="text-xs text-cb-marrom/60">Débito ou crédito</span>
           </button>
 
-          {/* Dinheiro — chama atendente */}
+          {/* Dinheiro — paga no balcão após retirar */}
           <button
-            disabled
-            className="flex flex-col items-center gap-3 bg-white border border-cb-marrom/10
-                       rounded-2xl p-6 min-h-[130px] opacity-40 cursor-not-allowed"
+            onClick={selecionarDinheiro}
+            disabled={carregando}
+            className="flex flex-col items-center gap-3 bg-white border-2 border-cb-marrom/20
+                       rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem
+                       hover:border-cb-amber hover:bg-cb-bege/50 transition-colors
+                       disabled:opacity-60"
           >
             <span className="text-4xl">💵</span>
             <span className="font-sans font-extrabold text-cb-marrom">Dinheiro</span>
-            <span className="text-xs text-cb-marrom/40">Chame um atendente</span>
+            <span className="text-xs text-cb-marrom/60">Pagar no balcão</span>
           </button>
 
           {/* Placeholder para manter grid simétrico */}

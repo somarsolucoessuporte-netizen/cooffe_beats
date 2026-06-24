@@ -30,6 +30,7 @@ interface Pedido {
   pago: boolean;
   pagamentoAntecipado: boolean;
   itens: ItemPedido[];
+  pagamento?: { metodo: string; status: string } | null;
 }
 
 function corCard(pedido: Pedido): string {
@@ -165,15 +166,22 @@ export default function KDS() {
                 key={`${pedido.id}-${tick}`}
                 className={`border-2 rounded-2xl p-5 flex flex-col gap-4 ${corCard(pedido)}`}
               >
-                {/* Badges pedido online */}
-                {pedido.origem === "APP" && (
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
-                      📱 Online
-                    </span>
+                {/* Badges: pedido online e/ou pagamento em dinheiro */}
+                {(pedido.origem === "APP" || pedido.pagamento?.metodo === "DINHEIRO") && (
+                  <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                    {pedido.origem === "APP" && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
+                        📱 Online
+                      </span>
+                    )}
                     {pedido.pago && (
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
                         ✓ Pago
+                      </span>
+                    )}
+                    {pedido.pagamento?.metodo === "DINHEIRO" && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300">
+                        💵 Pagar no balcão
                       </span>
                     )}
                   </div>
