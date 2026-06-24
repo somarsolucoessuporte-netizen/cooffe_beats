@@ -105,11 +105,15 @@ export default function KDS() {
         setPedidos((prev) => [payload as Pedido, ...prev]);
       })
       .on("broadcast", { event: "pedido:atualizado" }, ({ payload }) => {
-        const { id, status } = payload as { id: string; status: string };
-        if (["PRONTO", "ENTREGUE", "CANCELADO"].includes(status)) {
-          setPedidos((prev) => prev.filter((p) => p.id !== id));
+        const ev = payload as { id: string; status: string; pagamento?: { metodo: string; status: string } };
+        if (["PRONTO", "ENTREGUE", "CANCELADO"].includes(ev.status)) {
+          setPedidos((prev) => prev.filter((p) => p.id !== ev.id));
         } else {
-          setPedidos((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
+          setPedidos((prev) => prev.map((p) =>
+            p.id === ev.id
+              ? { ...p, status: ev.status, ...(ev.pagamento !== undefined ? { pagamento: ev.pagamento } : {}) }
+              : p
+          ));
         }
       })
       .subscribe();

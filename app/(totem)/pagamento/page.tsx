@@ -69,6 +69,7 @@ export default function Pagamento() {
 
   const [tela, setTela]           = useState<Tela>("escolha");
   const [carregando, setCarregando] = useState(false);
+  const [carregandoDinheiro, setCarregandoDinheiro] = useState(false);
   const [simulando, setSimulando] = useState(false);
   const [erro, setErro]           = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -258,28 +259,33 @@ export default function Pagamento() {
 
   // Pagamento em dinheiro: cria pedido + registra DINHEIRO + vai direto para confirmação
   const selecionarDinheiro = useCallback(async function() {
-    if (carregando || itens.length === 0) return;
+    if (carregandoDinheiro) return;
+    if (itens.length === 0) { setErro("Carrinho vazio. Adicione itens antes de pagar."); return; }
     playClick();
-    setCarregando(true);
+    setCarregandoDinheiro(true);
     setErro(null);
     try {
       var pedido = await criarPedido();
       pedidoRef.current = pedido;
 
-      await fetch("/api/pagamentos/dinheiro", {
+      const res = await fetch("/api/pagamentos/dinheiro", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ pedidoId: pedido.id, valor: totalValor }),
       });
+      const dados = await res.json().catch(function() { return null; });
+      if (dados && !dados.ok) {
+        throw new Error(dados.error ?? "Erro ao registrar pagamento em dinheiro");
+      }
 
       limparCarrinho();
       router.push("/confirmacao?senha=" + encodeURIComponent(pedido.senha) + "&id=" + pedido.id);
     } catch(err) {
       setErro(err instanceof Error ? err.message : "Erro ao processar pagamento em dinheiro");
-      setCarregando(false);
+      setCarregandoDinheiro(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [carregando, itens, totalValor, criarPedido]);
+  }, [carregandoDinheiro, itens, totalValor, criarPedido]);
 
   function voltarEscolha() {
     pararTudo();
@@ -487,14 +493,12 @@ export default function Pagamento() {
           {/* Dinheiro — paga no balcão após retirar */}
           <button
             onClick={selecionarDinheiro}
-            disabled={carregando}
-            className="flex flex-col items-center gap-3 bg-white border-2 border-cb-marrom/20
-                       rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem
-                       hover:border-cb-amber hover:bg-cb-bege/50 transition-colors
-                       disabled:opacity-60"
+            className={"flex flex-col items-center gap-3 bg-white border-2 rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem hover:border-cb-amber hover:bg-cb-bege/50 transition-colors " + (carregandoDinheiro ? "border-cb-amber opacity-70 cursor-wait" : "border-cb-marrom/20")}
           >
             <span className="text-4xl">💵</span>
-            <span className="font-sans font-extrabold text-cb-marrom">Dinheiro</span>
+            <span className="font-sans font-extrabold text-cb-marrom">
+              {carregandoDinheiro ? "Processando..." : "Dinheiro"}
+            </span>
             <span className="text-xs text-cb-marrom/60">Pagar no balcão</span>
           </button>
 

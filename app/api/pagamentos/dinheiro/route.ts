@@ -56,7 +56,12 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin.channel(`empresa-${pedido.empresaId}`).send({
         type:    "broadcast",
         event:   "pedido:atualizado",
-        payload: { id: pedidoId, status: "RECEBIDO", senha: pedido.senha },
+        payload: {
+          id:       pedidoId,
+          status:   "RECEBIDO",
+          senha:    pedido.senha,
+          pagamento: { metodo: "DINHEIRO", status: "APROVADO" },
+        },
       });
     }
 
