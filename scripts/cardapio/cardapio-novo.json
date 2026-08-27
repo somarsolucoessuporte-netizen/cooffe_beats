@@ -1,0 +1,269 @@
+{
+  "restaurante": "Coffee & Beats",
+  "slogan": "Café • Música • Bem-Estar",
+  "categorias": [
+    {
+      "id": "cafes",
+      "nome": "Cafés",
+      "subtitulo": "Quentes e Gelados",
+      "itens": [
+        { "id": "cafe-001", "nome": "Expresso", "preco": 10.00, "descricao": "" },
+        { "id": "cafe-002", "nome": "Expresso Duplo", "preco": 14.00, "descricao": "" },
+        { "id": "cafe-003", "nome": "Macchiato Latte com Creme de Leite Integral", "preco": 13.00, "descricao": "" },
+        { "id": "cafe-004", "nome": "Cappuccino Clássico Italiano", "preco": 16.00, "descricao": "" },
+        { "id": "cafe-005", "nome": "Cappuccino Especial", "preco": 25.00, "descricao": "Leite integral, expresso e ganache de nibs de cacau." },
+        { "id": "cafe-006", "nome": "Mocha de Chocolate", "preco": 24.00, "descricao": "" },
+        { "id": "cafe-007", "nome": "Affogato Clássico", "preco": 32.90, "descricao": "Gelato de creme, expresso e chantilly." },
+        { "id": "cafe-008", "nome": "Affogato Oreo", "preco": 32.90, "descricao": "Gelato de creme, leite integral e chocolate Oreo." }
+      ]
+    },
+    {
+      "id": "chocolate-quente",
+      "nome": "Chocolate Quente",
+      "itens": [
+        { "id": "choc-001", "nome": "Chocolate Quente", "preco": 22.00, "descricao": "" }
+      ]
+    },
+    {
+      "id": "soda-italiana",
+      "nome": "Soda Italiana",
+      "itens": [
+        { "id": "soda-001", "nome": "Soda Italiana de Limão Siciliano", "preco": 17.90, "descricao": "Xarope de tangerina e água tônica." },
+        { "id": "soda-002", "nome": "Soda Italiana de Morango", "preco": 17.90, "descricao": "Xarope de baunilha e água tônica." },
+        { "id": "soda-003", "nome": "Soda Italiana Coffee Beats", "preco": 17.90, "descricao": "Shot de café, caramelo e água tônica." },
+        { "id": "soda-004", "nome": "Soda Italiana de Tangerina", "preco": 17.90, "descricao": "Xarope de maçã verde e água tônica." }
+      ]
+    },
+    {
+      "id": "entradinhas",
+      "nome": "Entradinhas",
+      "subcategorias": [
+        {
+          "id": "mini-croissants",
+          "nome": "Mini-Croissants",
+          "porcao": "3 unidades",
+          "preco_porcao": 18.00,
+          "sabores": [
+            "Croissant de Peito de Peru",
+            "Croissant de Queijo",
+            "Croissant de Queijo e Salame"
+          ]
+        },
+        {
+          "id": "enroladinhos",
+          "nome": "Enroladinhos",
+          "porcao": "3 unidades",
+          "preco_porcao": 18.00,
+          "sabores": [
+            "Enroladinho Misto",
+            "Enroladinho de Peito de Peru e Queijo",
+            "Enroladinho de Frango e Queijo",
+            "Enroladinho de Carne de Sol e Queijo"
+          ]
+        },
+        {
+          "id": "tapioca-canoa",
+          "nome": "Tapioca Canoa com Goiabada Flambado com Queijo Coalho",
+          "porcao": "3 unidades",
+          "preco_porcao": 16.00,
+          "sabores": []
+        }
+      ]
+    },
+    {
+      "id": "cuscuz",
+      "nome": "Cuscuz",
+      "itens": [
+        { "id": "cus-001", "nome": "Cuscuz Simples com Manteiga", "preco": 15.00, "descricao": "" },
+        { "id": "cus-002", "nome": "Cuscuz com Carne de Sol", "preco": 18.90, "descricao": "" },
+        { "id": "cus-003", "nome": "Cuscuz com Carne de Sol + Requeijão", "preco": 18.90, "descricao": "" },
+        { "id": "cus-004", "nome": "Cuscuz com Carne Moída", "preco": 18.90, "descricao": "" },
+        { "id": "cus-005", "nome": "Cuscuz com Carne Moída + Requeijão", "preco": 18.90, "descricao": "" },
+        { "id": "cus-006", "nome": "Cuscuz com Queijo", "preco": 17.00, "descricao": "" },
+        { "id": "cus-007", "nome": "Cuscuz com Queijo + Requeijão", "preco": 17.00, "descricao": "" }
+      ]
+    },
+    {
+      "id": "tapiocas",
+      "nome": "Tapiocas",
+      "subcategorias": [
+        {
+          "id": "tapiocas-simples",
+          "nome": "Simples",
+          "itens": [
+            { "id": "tap-001", "nome": "Tapioca Simples", "preco": 14.00, "descricao": "" },
+            { "id": "tap-002", "nome": "Tapioca com Coco", "preco": 15.00, "descricao": "" },
+            { "id": "tap-003", "nome": "Tapioca com Leite de Coco", "preco": 15.00, "descricao": "" },
+            { "id": "tap-004", "nome": "Tapioca com Leite de Coco e Doce de Leite", "preco": 16.50, "descricao": "" }
+          ]
+        },
+        {
+          "id": "tapiocas-recheadas",
+          "nome": "Recheadas",
+          "itens": [
+            { "id": "tap-101", "nome": "Carne de Sol", "preco": 27.90, "descricao": "" },
+            { "id": "tap-102", "nome": "Carne de Sol + Queijo Coalho + Requeijão", "preco": 27.00, "descricao": "" },
+            { "id": "tap-103", "nome": "Frango", "preco": 27.90, "descricao": "" },
+            { "id": "tap-104", "nome": "Frango + Requeijão", "preco": 28.00, "descricao": "" },
+            { "id": "tap-105", "nome": "Carne Moída", "preco": 27.90, "descricao": "" },
+            { "id": "tap-106", "nome": "Carne Moída + Requeijão", "preco": 28.90, "descricao": "" },
+            { "id": "tap-107", "nome": "Queijo", "preco": 27.00, "descricao": "" },
+            { "id": "tap-108", "nome": "Queijo Coalho + Requeijão", "preco": 27.90, "descricao": "" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "salgados-fit",
+      "nome": "Salgados Fit",
+      "subcategorias": [
+        {
+          "id": "folheado-rapp",
+          "nome": "Folheado de Rapp",
+          "itens": [
+            { "id": "fol-001", "nome": "Frango, queijo muçarela e gergelim", "preco": 15.00, "descricao": "" },
+            { "id": "fol-002", "nome": "Carne de sol e queijo muçarela", "preco": 15.00, "descricao": "" },
+            { "id": "fol-003", "nome": "Carne moída e queijo muçarela", "preco": 15.00, "descricao": "" }
+          ]
+        },
+        {
+          "id": "rolo-rapp",
+          "nome": "Rolo Rapp",
+          "itens": [
+            { "id": "rol-001", "nome": "Frango + Queijo", "preco": 15.90, "descricao": "" },
+            { "id": "rol-002", "nome": "Peito de Peru + Queijo", "preco": 15.90, "descricao": "" },
+            { "id": "rol-003", "nome": "Carne de Sol + Queijo", "preco": 15.90, "descricao": "" }
+          ]
+        },
+        {
+          "id": "pizza-rapp",
+          "nome": "Pizza Rapp",
+          "itens": [
+            { "id": "piz-001", "nome": "Frango, queijo e molho de tomate", "preco": 21.90, "descricao": "" },
+            { "id": "piz-002", "nome": "Carne de sol, queijo e molho de tomate", "preco": 21.90, "descricao": "" },
+            { "id": "piz-003", "nome": "Carne moída, queijo e molho de tomate", "preco": 21.90, "descricao": "" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crepiocas",
+      "nome": "Crepiocas",
+      "itens": [
+        {
+          "id": "cre-001",
+          "nome": "Crepioca de Frango",
+          "preco": 25.00,
+          "descricao": "Goma de tapioca, ovo, milho, frango, queijo e requeijão."
+        },
+        {
+          "id": "cre-002",
+          "nome": "Crepioca de Carne Moída",
+          "preco": 25.90,
+          "descricao": "Goma de tapioca, ovo, queijo, requeijão e carne moída."
+        },
+        {
+          "id": "cre-003",
+          "nome": "Crepioca de Carne de Sol",
+          "preco": 25.90,
+          "descricao": "Goma de tapioca, ovo, orégano e carne de sol."
+        }
+      ]
+    },
+    {
+      "id": "omeletes",
+      "nome": "Omeletes",
+      "itens": [
+        {
+          "id": "ome-001",
+          "nome": "Omelete de Frango",
+          "preco": 26.90,
+          "descricao": "Ovo, frango, queijo, requeijão e orégano."
+        },
+        {
+          "id": "ome-002",
+          "nome": "Omelete de Carne Moída",
+          "preco": 26.90,
+          "descricao": "Ovo, carne moída, requeijão e orégano."
+        },
+        {
+          "id": "ome-003",
+          "nome": "Omelete de Carne de Sol",
+          "preco": 26.90,
+          "descricao": "Ovo, carne de sol, requeijão e queijo."
+        }
+      ]
+    },
+    {
+      "id": "pao-de-queijo",
+      "nome": "Pão de Queijo",
+      "itens": [
+        { "id": "pdq-001", "nome": "Pão de Queijo com Linguiça, Requeijão e Couve Frito", "preco": 20.00, "descricao": "" },
+        { "id": "pdq-002", "nome": "Pão de Queijo com Requeijão e Goiabada", "preco": 20.00, "descricao": "" },
+        { "id": "pdq-003", "nome": "Pão de Queijo Pequeno", "preco": 8.00, "descricao": "" },
+        { "id": "pdq-004", "nome": "Pão de Queijo com Alho-Poró", "preco": 12.00, "descricao": "" },
+        { "id": "pdq-005", "nome": "Pão de Queijo com Lombo Suíno", "preco": 12.00, "descricao": "" }
+      ]
+    },
+    {
+      "id": "sanduiches",
+      "nome": "Sanduíches",
+      "itens": [
+        {
+          "id": "san-001",
+          "nome": "Trio Americano",
+          "preco": 17.90,
+          "descricao": "Com ovo, pão artesanal, queijo coalho e 2 fatias de bacon."
+        },
+        {
+          "id": "san-002",
+          "nome": "Misto no Pão Artesanal + Requeijão",
+          "preco": 17.90,
+          "descricao": ""
+        },
+        {
+          "id": "san-003",
+          "nome": "Pão Artesanal + Queijo + Requeijão",
+          "preco": 15.90,
+          "descricao": ""
+        }
+      ]
+    },
+    {
+      "id": "croissants",
+      "nome": "Croissants",
+      "itens": [
+        { "id": "cro-001", "nome": "Croissant Tradicional", "preco": 15.90, "descricao": "" },
+        { "id": "cro-002", "nome": "Croissant com Muçarela e Salame", "preco": 35.90, "descricao": "" },
+        { "id": "cro-003", "nome": "Croissant com Queijo Brie e Geleia de Pimenta", "preco": 35.90, "descricao": "" },
+        { "id": "cro-004", "nome": "Croissant Carne de Sol com Queijo Coalho", "preco": 37.90, "descricao": "" }
+      ]
+    },
+    {
+      "id": "doces",
+      "nome": "Doces",
+      "itens": [
+        { "id": "doc-001", "nome": "Bolo de Cenoura com Calda de Chocolate", "preco": 15.00, "descricao": "" },
+        { "id": "doc-002", "nome": "Waffle com Chantilly e Morango", "preco": 32.90, "descricao": "" },
+        { "id": "doc-003", "nome": "Waffle de Massa Branca Tradicional", "preco": 32.90, "descricao": "" },
+        { "id": "doc-004", "nome": "Waffle Tradicional", "preco": 29.00, "descricao": "" },
+        { "id": "doc-005", "nome": "Waffle com Doce de Leite", "preco": 32.90, "descricao": "" }
+      ]
+    },
+    {
+      "id": "adicionais",
+      "nome": "Adicionais",
+      "itens": [
+        { "id": "adi-001", "nome": "Leite", "preco": 6.00 },
+        { "id": "adi-002", "nome": "Ovo", "preco": 3.30 },
+        { "id": "adi-003", "nome": "Requeijão", "preco": 6.00 },
+        { "id": "adi-004", "nome": "Queijo Muçarela", "preco": 7.00 },
+        { "id": "adi-005", "nome": "Peito de Peru", "preco": 8.00 },
+        { "id": "adi-006", "nome": "Frango", "preco": 6.00 },
+        { "id": "adi-007", "nome": "Carne de Sol", "preco": 10.00 },
+        { "id": "adi-008", "nome": "Carne Moída", "preco": 10.00 },
+        { "id": "adi-009", "nome": "Bacon", "preco": 10.00 }
+      ]
+    }
+  ]
+}
