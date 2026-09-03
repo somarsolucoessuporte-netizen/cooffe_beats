@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import ImageCropModal from "./ImageCropModal";
 
 type Categoria = { id: string; nome: string; emoji: string };
 type Produto = {
@@ -52,6 +53,7 @@ export default function AdminProdutos() {
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [enviandoImagem, setEnviandoImagem] = useState(false);
   const [erroImagem, setErroImagem] = useState<string | null>(null);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const carregarProdutos = useCallback(async () => {
@@ -106,11 +108,13 @@ export default function AdminProdutos() {
     setPreviewLocal(null);
     setErroImagem(null);
     setEnviandoImagem(false);
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
   };
 
   const selecionarImagem = () => fileInputRef.current?.click();
 
-  const onArquivoSelecionado = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
     const arquivo = e.target.files?.[0];
     e.target.value = "";
     if (!arquivo) return;
@@ -126,11 +130,22 @@ export default function AdminProdutos() {
     }
 
     setErroImagem(null);
-    setPreviewLocal(URL.createObjectURL(arquivo));
+    setCropSrc(URL.createObjectURL(arquivo));
+  };
+
+  const cancelarCrop = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+  };
+
+  const confirmarCrop = async (blob: Blob) => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    setPreviewLocal(URL.createObjectURL(blob));
     setEnviandoImagem(true);
     try {
       const body = new FormData();
-      body.append("imagem", arquivo);
+      body.append("imagem", blob, "produto.jpg");
       const res = await fetch("/api/admin/produtos/upload", { method: "POST", body });
       const data = await res.json();
       if (data.ok) {
@@ -478,6 +493,9 @@ export default function AdminProdutos() {
                     {erroImagem && <p className="text-xs text-red-500">{erroImagem}</p>}
                   </div>
                 </div>
+                <p className="text-[11px] text-zinc-400 mt-2">
+                  📷 Recomendado: quadrado (1:1) · mínimo 400×400px · JPEG ou PNG · até 5MB
+                </p>
               </div>
 
               <div className="flex gap-6 pt-1">
@@ -539,6 +557,10 @@ export default function AdminProdutos() {
             </div>
           </div>
         </div>
+      )}
+
+      {cropSrc && (
+        <ImageCropModal src={cropSrc} onCancel={cancelarCrop} onConfirm={confirmarCrop} />
       )}
     </div>
   );
