@@ -27,13 +27,13 @@ export default function GradeProdutos({ produtos, carregando }: GradeProdutosPro
   return (
     <div className="flex-1 overflow-y-auto totem-scroll p-3 bg-cb-bege">
       {carregando ? (
-        <div className="grid grid-cols-4 gap-[10px]">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-[10px]">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="bg-cb-marrom/10 rounded-[10px] h-32 animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-4 gap-[10px]">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-[10px]">
           {produtos.map((produto) => (
             <div
               key={produto.id}
