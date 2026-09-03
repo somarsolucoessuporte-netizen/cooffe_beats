@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 type Categoria = { id: string; nome: string; emoji: string };
 type Produto = {
@@ -49,6 +49,10 @@ export default function AdminProdutos() {
   const [form, setForm] = useState<FormData>(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  const [previewLocal, setPreviewLocal] = useState<string | null>(null);
+  const [enviandoImagem, setEnviandoImagem] = useState(false);
+  const [erroImagem, setErroImagem] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const carregarProdutos = useCallback(async () => {
     setCarregando(true);
@@ -72,6 +76,8 @@ export default function AdminProdutos() {
   const abrirCriar = () => {
     setEditandoId(null);
     setForm({ ...FORM_VAZIO, categoriaId: categorias[0]?.id ?? "" });
+    setPreviewLocal(null);
+    setErroImagem(null);
     setModalAberto(true);
     setMsg(null);
   };
@@ -87,6 +93,8 @@ export default function AdminProdutos() {
       destaque: p.destaque,
       disponivel: p.disponivel,
     });
+    setPreviewLocal(null);
+    setErroImagem(null);
     setModalAberto(true);
     setMsg(null);
   };
@@ -95,6 +103,54 @@ export default function AdminProdutos() {
     setModalAberto(false);
     setEditandoId(null);
     setForm(FORM_VAZIO);
+    setPreviewLocal(null);
+    setErroImagem(null);
+    setEnviandoImagem(false);
+  };
+
+  const selecionarImagem = () => fileInputRef.current?.click();
+
+  const onArquivoSelecionado = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!arquivo) return;
+
+    const tiposAceitos = ["image/jpeg", "image/png", "image/webp"];
+    if (!tiposAceitos.includes(arquivo.type)) {
+      setErroImagem("Formato inválido. Envie um arquivo JPEG, PNG ou WEBP.");
+      return;
+    }
+    if (arquivo.size > 5 * 1024 * 1024) {
+      setErroImagem("Arquivo maior que 5MB.");
+      return;
+    }
+
+    setErroImagem(null);
+    setPreviewLocal(URL.createObjectURL(arquivo));
+    setEnviandoImagem(true);
+    try {
+      const body = new FormData();
+      body.append("imagem", arquivo);
+      const res = await fetch("/api/admin/produtos/upload", { method: "POST", body });
+      const data = await res.json();
+      if (data.ok) {
+        setForm((f) => ({ ...f, fotoUrl: data.data.url }));
+      } else {
+        setErroImagem(data.error ?? "Falha no upload. Tente novamente.");
+        setPreviewLocal(null);
+      }
+    } catch {
+      setErroImagem("Falha no upload. Tente novamente.");
+      setPreviewLocal(null);
+    } finally {
+      setEnviandoImagem(false);
+    }
+  };
+
+  const removerImagem = () => {
+    setForm((f) => ({ ...f, fotoUrl: "" }));
+    setPreviewLocal(null);
+    setErroImagem(null);
   };
 
   const salvar = async () => {
@@ -368,14 +424,60 @@ export default function AdminProdutos() {
 
               <div>
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
-                  URL da Foto
+                  Foto do Produto
                 </label>
                 <input
-                  value={form.fotoUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, fotoUrl: e.target.value }))}
-                  className={inputClass}
-                  placeholder="https://example.com/foto.jpg"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={onArquivoSelecionado}
+                  className="hidden"
                 />
+                <div className="flex items-center gap-3 border border-zinc-200 rounded-xl px-4 py-3">
+                  <div className="w-20 h-20 rounded-lg bg-zinc-100 overflow-hidden shrink-0">
+                    {previewLocal || form.fotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={previewLocal || form.fotoUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">
+                        ☕
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={selecionarImagem}
+                        disabled={enviandoImagem}
+                        className="text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                      >
+                        Selecionar imagem
+                      </button>
+                      {(previewLocal || form.fotoUrl) && (
+                        <button
+                          type="button"
+                          onClick={removerImagem}
+                          disabled={enviandoImagem}
+                          className="text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-200 text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                    {enviandoImagem && (
+                      <p className="text-xs text-zinc-400 flex items-center gap-1.5">
+                        <span className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-500 rounded-full animate-spin" />
+                        Enviando...
+                      </p>
+                    )}
+                    {erroImagem && <p className="text-xs text-red-500">{erroImagem}</p>}
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-6 pt-1">
@@ -428,7 +530,7 @@ export default function AdminProdutos() {
               </button>
               <button
                 onClick={salvar}
-                disabled={salvando}
+                disabled={salvando || enviandoImagem}
                 className="font-bold px-6 py-2.5 rounded-xl text-sm disabled:opacity-50 shadow-sm hover:opacity-90 transition-opacity"
                 style={{ background: "#3B2415", color: "#F6F0E5" }}
               >
