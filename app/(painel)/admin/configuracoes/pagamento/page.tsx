@@ -16,19 +16,31 @@ type Form = {
   configurado:       boolean;
 };
 
+type ReaderInfo = {
+  id:     string;
+  name:   string;
+  status: string;
+  device?: { serial_number?: string };
+};
+
 export default function PagamentoConfigPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const perfil = (session?.user as { perfil?: string } | undefined)?.perfil;
 
-  const [form,      setForm]      = useState<Form>({
+  const [form, setForm] = useState<Form>({
     sumupClientId: "", sumupClientSecret: "", sumupMerchantCode: "",
     sumupAffiliateKey: "", sumupOnlineAtivo: false, configurado: false,
   });
-  const [carregando, setCarregando] = useState(true);
-  const [salvando,   setSalvando]   = useState(false);
-  const [testando,   setTestando]   = useState(false);
-  const [msg,        setMsg]        = useState<{ texto: string; ok: boolean } | null>(null);
+  const [carregando,  setCarregando]  = useState(true);
+  const [salvando,    setSalvando]    = useState(false);
+  const [testando,    setTestando]    = useState(false);
+  const [msg,         setMsg]         = useState<{ texto: string; ok: boolean } | null>(null);
+
+  // Estado do card de maquininha
+  const [verificandoLeitora, setVerificandoLeitora] = useState(false);
+  const [leitoraInfo,        setLeitoraInfo]        = useState<ReaderInfo | null>(null);
+  const [leitoraErro,        setLeitoraErro]        = useState<string | null>(null);
 
   useEffect(() => {
     if (perfil && perfil !== "ADMIN") { router.push("/dashboard"); return; }
@@ -57,7 +69,6 @@ export default function PagamentoConfigPage() {
       const d = await r.json();
       if (d.ok) {
         feedback("Configurações salvas com sucesso!", true);
-        // Recarrega para atualizar o badge
         const r2 = await fetch("/api/admin/configuracoes/sumup");
         const d2 = await r2.json();
         if (d2.ok) setForm((f) => ({ ...f, ...d2.data }));
@@ -88,6 +99,27 @@ export default function PagamentoConfigPage() {
       feedback("Erro ao testar conexão.", false);
     } finally {
       setTestando(false);
+    }
+  }
+
+  async function verificarLeitora() {
+    setVerificandoLeitora(true);
+    setLeitoraErro(null);
+    setLeitoraInfo(null);
+    try {
+      const r = await fetch("/api/pagamentos/sumup/readers");
+      const d = await r.json() as { ok: boolean; readers?: ReaderInfo[]; error?: string };
+      if (d.ok && d.readers && d.readers.length > 0) {
+        setLeitoraInfo(d.readers[0]);
+      } else if (d.ok) {
+        setLeitoraErro("Nenhuma maquininha registrada. Emparelhe via app SumUp Business.");
+      } else {
+        setLeitoraErro(d.error ?? "Erro ao verificar maquininha");
+      }
+    } catch {
+      setLeitoraErro("Erro de conexão ao verificar maquininha");
+    } finally {
+      setVerificandoLeitora(false);
     }
   }
 
@@ -154,7 +186,7 @@ export default function PagamentoConfigPage() {
         </p>
       </div>
 
-      {/* Formulário */}
+      {/* Formulário de credenciais */}
       <div className="bg-white rounded-2xl border border-cb-marrom/10 p-6 flex flex-col gap-5">
         <h2 className="font-semibold text-cb-marrom">Credenciais de API</h2>
 
@@ -188,6 +220,49 @@ export default function PagamentoConfigPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Card Maquininha SumUp (Totem) */}
+      <div className="bg-white rounded-2xl border border-cb-marrom/10 p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-cb-marrom">Maquininha SumUp (Totem)</h2>
+            <p className="text-xs text-cb-marrom/40 mt-0.5">
+              Leitora física para pagamentos PIX e Cartão no totem
+            </p>
+          </div>
+          {leitoraInfo && (
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${
+              leitoraInfo.status === "online"
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-600"
+            }`}>
+              {leitoraInfo.status === "online" ? "● Online" : "● Offline"}
+            </span>
+          )}
+        </div>
+
+        {leitoraInfo && (
+          <div className="bg-cb-bege/50 rounded-xl p-3 text-xs font-mono text-cb-marrom/70 flex flex-col gap-1">
+            <p>Serial: {leitoraInfo.device?.serial_number ?? "—"}</p>
+            <p>ID: {leitoraInfo.id}</p>
+            <p>Nome: {leitoraInfo.name}</p>
+            <p>Status: {leitoraInfo.status}</p>
+          </div>
+        )}
+
+        {leitoraErro && (
+          <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{leitoraErro}</p>
+        )}
+
+        <button
+          onClick={verificarLeitora}
+          disabled={verificandoLeitora}
+          className="self-start px-5 py-2.5 rounded-xl border-2 border-cb-marrom/20 text-cb-marrom
+                     text-sm font-semibold hover:border-cb-marrom/40 transition-colors disabled:opacity-40"
+        >
+          {verificandoLeitora ? "Verificando..." : "Verificar conexão"}
+        </button>
       </div>
 
       {/* Feedback */}

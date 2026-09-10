@@ -9,6 +9,10 @@ const SimularPagamentoSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  if (process.env.NEXT_PUBLIC_PAGAMENTO_SIMULADO !== "true") {
+    return erroResposta("Simulação desativada", 403);
+  }
+
   try {
     const body = await req.json();
     const validacao = SimularPagamentoSchema.safeParse(body);

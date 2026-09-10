@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verificarCheckout } from "@/lib/sumup";
+import { verificarCheckout, verificarReaderCheckout } from "@/lib/sumup";
 
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
+  const { id }   = await params;
+  const readerId = req.nextUrl.searchParams.get("readerId");
+
   try {
+    // Pagamento via maquininha: usa endpoint específico do terminal
+    if (readerId) {
+      try {
+        const resultado = await verificarReaderCheckout(readerId, id);
+        return NextResponse.json({ ok: true, ...resultado });
+      } catch {
+        // Endpoint do terminal falhou; tenta o genérico de checkout
+        console.warn("[SumUp status] reader endpoint falhou, tentando checkout genérico");
+      }
+    }
+
     const resultado = await verificarCheckout(id);
     return NextResponse.json({ ok: true, ...resultado });
   } catch (e) {
