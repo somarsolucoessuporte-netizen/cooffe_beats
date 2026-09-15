@@ -189,15 +189,16 @@ model ItemAdicional {
 }
 
 model Pagamento {
-  id         String          @id @default(cuid())
-  pedidoId   String          @unique
-  metodo     MetodoPagamento
-  status     StatusPagamento @default(PENDENTE)
-  valor      Decimal         @db.Decimal(10, 2)
-  referencia String?
-  payload    Json?
-  criadoEm   DateTime        @default(now())
-  paidAt     DateTime?
+  id                   String          @id @default(cuid())
+  pedidoId             String          @unique
+  metodo               MetodoPagamento
+  status               StatusPagamento @default(PENDENTE)
+  valor                Decimal         @db.Decimal(10, 2)
+  referencia           String?
+  payload              Json?
+  criadoEm             DateTime        @default(now())
+  paidAt               DateTime?
+  confirmadoManualmente Boolean        @default(false)
 
   pedido Pedido @relation(fields: [pedidoId], references: [id])
 }

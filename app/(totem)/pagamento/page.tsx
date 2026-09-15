@@ -16,6 +16,7 @@ const TIMEOUT_PIX_MS        = 10 * 60 * 1000; // 10 minutos
 const TIMEOUT_MAQUININHA_MS =  5 * 60 * 1000; // 5 minutos
 const POLL_STATUS_MS        = 3000;
 const POLL_CARTAO_MS        = 2000;
+const CONFIRMACAO_MANUAL_MS = 30 * 1000; // exibe botão de confirmação manual após 30s
 
 // QR Code visual para modo demo
 function QRFakeDemo() {
@@ -75,11 +76,14 @@ export default function Pagamento() {
   const [erro, setErro]                 = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl]   = useState<string | null>(null);
   const [tempoRestante, setTempoRestante] = useState(600);
+  const [mostrarConfirmacaoManual, setMostrarConfirmacaoManual] = useState(false);
+  const [confirmandoManual, setConfirmandoManual] = useState(false);
 
   const pedidoRef   = useRef<{ id: string; senha: string } | null>(null);
   const pollingRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const manualRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalRef    = useRef(totalValor);
   totalRef.current  = totalValor;
   const metodoRef   = useRef<"PIX" | "CARTAO" | "DINHEIRO">("PIX");
@@ -91,6 +95,7 @@ export default function Pagamento() {
       if (pollingRef.current) clearInterval(pollingRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (timerRef.current)   clearInterval(timerRef.current);
+      if (manualRef.current)  clearTimeout(manualRef.current);
     };
   }, []);
 
@@ -98,12 +103,14 @@ export default function Pagamento() {
     if (pollingRef.current) clearInterval(pollingRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (timerRef.current)   clearInterval(timerRef.current);
+    if (manualRef.current)  clearTimeout(manualRef.current);
   }
 
   function pararPolling() {
     if (pollingRef.current) clearInterval(pollingRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (timerRef.current)   clearInterval(timerRef.current);
+    if (manualRef.current)  clearTimeout(manualRef.current);
   }
 
   // Regressiva exibida na tela; duracao em segundos
@@ -145,6 +152,8 @@ export default function Pagamento() {
    */
   function iniciarPolling(pedidoId: string, maquininha = false) {
     pararPolling();
+    setMostrarConfirmacaoManual(false);
+    setConfirmandoManual(false);
 
     var duracaoSeg = maquininha ? 300 : 600;
     iniciarTimer(duracaoSeg);
@@ -154,6 +163,10 @@ export default function Pagamento() {
       setErro("Tempo de pagamento expirado. Tente novamente.");
       setTela("escolha");
     }, maquininha ? TIMEOUT_MAQUININHA_MS : TIMEOUT_PIX_MS);
+
+    manualRef.current = setTimeout(function() {
+      setMostrarConfirmacaoManual(true);
+    }, CONFIRMACAO_MANUAL_MS);
 
     var pollMs = maquininha ? POLL_CARTAO_MS : (metodoRef.current === "CARTAO" ? POLL_CARTAO_MS : POLL_STATUS_MS);
 
@@ -182,6 +195,32 @@ export default function Pagamento() {
         }
       } catch(e) { /* manter polling em erros de rede */ }
     }, pollMs);
+  }
+
+  // Fallback manual: operador confirma que a maquininha aprovou quando o
+  // webhook do SumUp não chega a tempo. Totem avança como no fluxo automático.
+  async function confirmarManualmente() {
+    if (!pedidoRef.current || confirmandoManual) return;
+    playClick();
+    setConfirmandoManual(true);
+    setErro(null);
+    try {
+      var res   = await fetch("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, { method: "POST" });
+      var dados = await res.json();
+      if (!dados.ok) throw new Error(dados.error ?? "Erro ao confirmar pagamento");
+
+      pararPolling();
+      if (pedidoRef.current) {
+        limparCarrinho();
+        router.push(
+          "/confirmacao?senha=" + encodeURIComponent(pedidoRef.current.senha) +
+          "&id=" + pedidoRef.current.id
+        );
+      }
+    } catch(err) {
+      setErro(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
+      setConfirmandoManual(false);
+    }
   }
 
   const criarPedido = useCallback(async function() {
@@ -306,6 +345,33 @@ export default function Pagamento() {
     setErro(null);
     setSimulando(false);
     setTempoRestante(600);
+    setMostrarConfirmacaoManual(false);
+    setConfirmandoManual(false);
+  }
+
+  // Botão de fallback exibido 30s após o início do polling real (não aparece em DEMO,
+  // que já tem botões de simulação próprios).
+  function ConfirmacaoManual() {
+    if (DEMO || !mostrarConfirmacaoManual) return null;
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-cb-marrom/60 text-sm text-center max-w-xs">
+          Pagamento aprovado na maquineta? Toque para confirmar.
+        </p>
+        <button
+          onClick={confirmarManualmente}
+          disabled={confirmandoManual}
+          className="flex items-center gap-3 bg-green-50 border-2 border-green-500 text-green-700
+                     font-extrabold text-lg py-4 px-8 rounded-2xl touch-manipulation btn-totem
+                     disabled:opacity-60 hover:bg-green-100 transition-colors"
+        >
+          {confirmandoManual && (
+            <span className="w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+          )}
+          {confirmandoManual ? "Confirmando..." : "Confirmar pagamento ✓"}
+        </button>
+      </div>
+    );
   }
 
   // ─── TELA MAQUININHA ─────────────────────────────────────────────────────────
@@ -355,6 +421,8 @@ export default function Pagamento() {
               {erro}
             </div>
           )}
+
+          <ConfirmacaoManual />
 
           <button
             onClick={voltarEscolha}
@@ -431,6 +499,8 @@ export default function Pagamento() {
             </div>
           )}
 
+          <ConfirmacaoManual />
+
           <button
             onClick={voltarEscolha}
             className="text-cb-marrom/50 text-sm underline underline-offset-4"
@@ -495,6 +565,8 @@ export default function Pagamento() {
               {erro}
             </div>
           )}
+
+          <ConfirmacaoManual />
 
           <button
             onClick={voltarEscolha}
