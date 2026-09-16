@@ -40,6 +40,10 @@ function ConfirmacaoConteudo() {
   const [telefoneCliente, setTelefoneCliente] = useState<string | undefined>();
   const [isMesa, setIsMesa]                   = useState(false);
 
+  type StatusImpressao = "idle" | "printing" | "success" | "error";
+  const [statusReimprimirCliente, setStatusReimprimirCliente] = useState<StatusImpressao>("idle");
+  const [statusReimprimirCozinha, setStatusReimprimirCozinha] = useState<StatusImpressao>("idle");
+
   const duracaoMs = 5 * 60 * 1000;
   const inicioRef = useRef(Date.now());
 
@@ -137,6 +141,34 @@ function ConfirmacaoConteudo() {
       printCupom({ numeroPedido: senha, itens, total: totalPedido, via: "COZINHA" })
         .catch(function() {});
     }, 500);
+  }
+
+  async function handleReimprimir(via: "CLIENTE" | "COZINHA") {
+    playClick();
+    var setStatus = via === "CLIENTE" ? setStatusReimprimirCliente : setStatusReimprimirCozinha;
+    setStatus("printing");
+    var itens = buildItens();
+    var resultado = await printCupom({
+      numeroPedido: senha,
+      itens: itens,
+      total: totalPedido,
+      nomeCliente: nomeCliente,
+      metodoPagamento: metodoPagamento,
+      via: via,
+    });
+    if (resultado.success) {
+      setStatus("success");
+      setTimeout(function() { setStatus("idle"); }, 2000);
+    } else {
+      setStatus("error");
+    }
+  }
+
+  function textoBotaoReimprimir(status: StatusImpressao, textoOriginal: string) {
+    if (status === "printing") return "Imprimindo...";
+    if (status === "success")  return "Impresso ✓";
+    if (status === "error")    return "Falha na impressão";
+    return textoOriginal;
   }
 
   var info = STATUS_INFO[statusAtual] ?? STATUS_INFO.RECEBIDO;
@@ -237,6 +269,62 @@ function ConfirmacaoConteudo() {
             <span className="text-4xl">🖨️</span>
             <span className="font-bold text-[#3B2415] text-sm leading-tight">Imprimir</span>
             <span className="font-bold text-[#3B2415] text-sm leading-tight">aqui</span>
+          </button>
+        </div>
+      )}
+
+      {/* Segunda via — reimpressão avulsa do cupom */}
+      {!isComanda && impressaoAtiva && itensPedido.length > 0 && (
+        <div className="flex gap-4 w-full max-w-sm">
+          <button
+            onClick={function() { handleReimprimir("CLIENTE"); }}
+            disabled={statusReimprimirCliente === "printing"}
+            className={
+              "flex-1 flex flex-col items-center gap-2 border-2 rounded-2xl px-4 py-4 " +
+              "touch-manipulation active:scale-95 transition-transform disabled:opacity-70 " +
+              (statusReimprimirCliente === "error"
+                ? "bg-red-50 border-red-500"
+                : "bg-[#F5ECD7] border-[#3B2415]")
+            }
+          >
+            {statusReimprimirCliente === "printing" ? (
+              <span className="w-8 h-8 rounded-full border-4 border-[#3B2415]/20 border-t-[#3B2415] animate-spin" />
+            ) : (
+              <span className="text-3xl">🖨️</span>
+            )}
+            <span
+              className={
+                "font-bold text-xs leading-tight " +
+                (statusReimprimirCliente === "error" ? "text-red-600" : "text-[#3B2415]")
+              }
+            >
+              {textoBotaoReimprimir(statusReimprimirCliente, "Reimprimir via cliente")}
+            </span>
+          </button>
+          <button
+            onClick={function() { handleReimprimir("COZINHA"); }}
+            disabled={statusReimprimirCozinha === "printing"}
+            className={
+              "flex-1 flex flex-col items-center gap-2 border-2 rounded-2xl px-4 py-4 " +
+              "touch-manipulation active:scale-95 transition-transform disabled:opacity-70 " +
+              (statusReimprimirCozinha === "error"
+                ? "bg-red-50 border-red-500"
+                : "bg-[#F5ECD7] border-[#3B2415]")
+            }
+          >
+            {statusReimprimirCozinha === "printing" ? (
+              <span className="w-8 h-8 rounded-full border-4 border-[#3B2415]/20 border-t-[#3B2415] animate-spin" />
+            ) : (
+              <span className="text-3xl">🖨️</span>
+            )}
+            <span
+              className={
+                "font-bold text-xs leading-tight " +
+                (statusReimprimirCozinha === "error" ? "text-red-600" : "text-[#3B2415]")
+              }
+            >
+              {textoBotaoReimprimir(statusReimprimirCozinha, "Reimprimir via cozinha")}
+            </span>
           </button>
         </div>
       )}
