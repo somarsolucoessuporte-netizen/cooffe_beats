@@ -1,15 +1,18 @@
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) return erroResposta("Não autenticado", 401);
 
-  const user = session.user as { empresaId?: string };
-  const empresaId = user.empresaId;
-  if (!empresaId) return erroResposta("Sessão inválida", 401);
+  // Admin/staff logado usa a empresa da sessão; totem anônimo manda ?empresaId=
+  const empresaId = session?.user
+    ? (session.user as { empresaId?: string }).empresaId
+    : req.nextUrl.searchParams.get("empresaId") ?? undefined;
+
+  if (!empresaId) return erroResposta("Não autenticado", 401);
 
   const caixa = await prisma.caixa.findFirst({
     where: { empresaId, status: "ABERTO" },
@@ -37,7 +40,7 @@ export async function GET() {
       id:            caixa.id,
       abridoEm:      caixa.abridoEm,
       valorAbertura: Number(caixa.valorAbertura),
-      operador:      caixa.usuario.nome,
+      operador:      caixa.usuario?.nome ?? caixa.operadorNome ?? "—",
     },
     resumo: {
       totalPedidos: caixa.pedidos.length,

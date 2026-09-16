@@ -278,7 +278,8 @@ enum StatusCaixa {
 model Caixa {
   id              String      @id @default(cuid())
   empresaId       String
-  usuarioId       String
+  usuarioId       String?
+  operadorNome    String?
   status          StatusCaixa @default(ABERTO)
   valorAbertura   Decimal     @default(0) @db.Decimal(10, 2)
   valorFechamento Decimal?    @db.Decimal(10, 2)
@@ -287,7 +288,7 @@ model Caixa {
   fechadoEm       DateTime?
 
   empresa  Empresa  @relation(fields: [empresaId], references: [id])
-  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+  usuario  Usuario? @relation(fields: [usuarioId], references: [id])
   pedidos  Pedido[]
 
   @@map("caixas")
