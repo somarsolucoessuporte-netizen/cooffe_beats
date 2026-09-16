@@ -161,6 +161,7 @@ function ConfirmacaoConteudo() {
       setTimeout(function() { setStatus("idle"); }, 2000);
     } else {
       setStatus("error");
+      setTimeout(function() { setStatus("idle"); }, 3000);
     }
   }
 
