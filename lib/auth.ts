@@ -19,7 +19,7 @@ export const authOptions: NextAuthOptions = {
           include: { empresa: true },
         });
 
-        if (!usuario || !usuario.ativo) return null;
+        if (!usuario || !usuario.ativo || !usuario.senha) return null;
 
         const senhaCorreta = await bcrypt.compare(credentials.senha, usuario.senha);
         if (!senhaCorreta) return null;

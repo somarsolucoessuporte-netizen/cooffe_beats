@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
+import { randomBytes } from "crypto";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { getAdminSession } from "@/lib/admin-auth";
@@ -8,7 +8,6 @@ import { getAdminSession } from "@/lib/admin-auth";
 const UsuarioSchema = z.object({
   nome: z.string().min(1),
   email: z.string().email(),
-  senha: z.string().min(6),
   perfil: z.enum(["ADMIN", "GERENTE", "BARISTA", "ATENDENTE"]),
   ativo: z.boolean().default(true),
 });
@@ -20,7 +19,16 @@ const CAMPOS_PUBLICOS = {
   perfil: true,
   ativo: true,
   criadoEm: true,
+  senha: true,
 } as const;
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://coffeebeats.somar.ia.br";
+const CONVITE_VALIDADE_DIAS = 7;
+
+function paraPublico(u: { senha: string | null } & Record<string, unknown>) {
+  const { senha, ...resto } = u;
+  return { ...resto, senhaDefinida: !!senha };
+}
 
 export async function GET() {
   const { erro, empresaId } = await getAdminSession(["ADMIN"]);
@@ -32,12 +40,13 @@ export async function GET() {
       select: CAMPOS_PUBLICOS,
       orderBy: { nome: "asc" },
     });
-    return resposta(usuarios);
+    return resposta(usuarios.map(paraPublico));
   } catch {
     return erroResposta("Erro ao buscar usuários", 500);
   }
 }
 
+// POST — cria usuário sem senha e gera um link de convite (funcionário cria a própria senha)
 export async function POST(req: NextRequest) {
   const { erro, empresaId } = await getAdminSession(["ADMIN"]);
   if (erro) return erro;
@@ -47,13 +56,18 @@ export async function POST(req: NextRequest) {
     const validacao = UsuarioSchema.safeParse(body);
     if (!validacao.success) return erroResposta(validacao.error.message);
 
-    const senhaHash = await bcrypt.hash(validacao.data.senha, 12);
+    const conviteToken = randomBytes(16).toString("hex");
+    const conviteExpira = new Date(Date.now() + CONVITE_VALIDADE_DIAS * 24 * 60 * 60 * 1000);
 
     const usuario = await prisma.usuario.create({
-      data: { ...validacao.data, senha: senhaHash, empresaId: empresaId! },
+      data: { ...validacao.data, empresaId: empresaId!, conviteToken, conviteExpira },
       select: CAMPOS_PUBLICOS,
     });
-    return resposta(usuario, 201);
+
+    return resposta(
+      { ...paraPublico(usuario), conviteUrl: `${BASE_URL}/convite/${conviteToken}` },
+      201
+    );
   } catch (err) {
     const isDuplicate =
       err instanceof Error && err.message.toLowerCase().includes("unique");

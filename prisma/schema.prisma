@@ -33,14 +33,16 @@ model Empresa {
 }
 
 model Usuario {
-  id        String   @id @default(cuid())
-  empresaId String
-  nome      String
-  email     String   @unique
-  senha     String
-  perfil    Perfil   @default(ATENDENTE)
-  ativo     Boolean  @default(true)
-  criadoEm  DateTime @default(now())
+  id            String    @id @default(cuid())
+  empresaId     String
+  nome          String
+  email         String    @unique
+  senha         String?
+  perfil        Perfil    @default(ATENDENTE)
+  ativo         Boolean   @default(true)
+  criadoEm      DateTime  @default(now())
+  conviteToken  String?   @unique
+  conviteExpira DateTime?
 
   empresa Empresa  @relation(fields: [empresaId], references: [id])
   pedidos Pedido[] @relation("PedidoAtendente")

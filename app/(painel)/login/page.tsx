@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mensagem = searchParams.get("msg");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
@@ -84,6 +86,12 @@ export default function Login() {
             />
           </div>
 
+          {mensagem && !erro && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm">
+              {mensagem}
+            </div>
+          )}
+
           {erro && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">
               {erro}
@@ -102,5 +110,13 @@ export default function Login() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<div className="h-full" style={{ background: "#F6F0E5" }} />}>
+      <LoginForm />
+    </Suspense>
   );
 }

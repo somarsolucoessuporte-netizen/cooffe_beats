@@ -10,6 +10,7 @@ type Usuario = {
   perfil: Perfil;
   ativo: boolean;
   criadoEm: string;
+  senhaDefinida: boolean;
 };
 type FormData = {
   nome: string;
@@ -45,6 +46,9 @@ export default function AdminUsuarios() {
   const [form, setForm] = useState<FormData>(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  const [linkConvite, setLinkConvite] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  const [reenviandoId, setReenviandoId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -83,28 +87,39 @@ export default function AdminUsuarios() {
       setMsg({ tipo: "erro", texto: "Nome e email são obrigatórios." });
       return;
     }
-    if (!editandoId && !form.senha) {
-      setMsg({ tipo: "erro", texto: "Senha é obrigatória para novos usuários." });
-      return;
-    }
     setSalvando(true);
     try {
-      const body: Partial<FormData> = { ...form };
-      if (editandoId && !body.senha) delete body.senha;
+      if (editandoId) {
+        const body: Partial<FormData> = { ...form };
+        if (!body.senha) delete body.senha;
 
-      const url = editandoId ? `/api/admin/usuarios/${editandoId}` : "/api/admin/usuarios";
-      const res = await fetch(url, {
-        method: editandoId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        fecharModal();
-        setMsg({ tipo: "ok", texto: editandoId ? "Usuário atualizado!" : "Usuário criado!" });
-        carregar();
+        const res = await fetch(`/api/admin/usuarios/${editandoId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          fecharModal();
+          setMsg({ tipo: "ok", texto: "Usuário atualizado!" });
+          carregar();
+        } else {
+          setMsg({ tipo: "erro", texto: data.error ?? "Erro ao salvar." });
+        }
       } else {
-        setMsg({ tipo: "erro", texto: data.error ?? "Erro ao salvar." });
+        const res = await fetch("/api/admin/usuarios", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nome: form.nome, email: form.email, perfil: form.perfil, ativo: form.ativo }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          fecharModal();
+          setLinkConvite(data.data.conviteUrl);
+          carregar();
+        } else {
+          setMsg({ tipo: "erro", texto: data.error ?? "Erro ao gerar convite." });
+        }
       }
     } finally {
       setSalvando(false);
@@ -115,6 +130,32 @@ export default function AdminUsuarios() {
     if (!confirm("Desativar este usuário?")) return;
     await fetch(`/api/admin/usuarios/${id}`, { method: "DELETE" });
     carregar();
+  };
+
+  const reenviarConvite = async (id: string) => {
+    setReenviandoId(id);
+    try {
+      const res = await fetch(`/api/admin/usuarios/${id}/reenviar-convite`, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setLinkConvite(data.data.conviteUrl);
+      } else {
+        setMsg({ tipo: "erro", texto: data.error ?? "Erro ao reenviar convite." });
+      }
+    } finally {
+      setReenviandoId(null);
+    }
+  };
+
+  const copiarLink = async () => {
+    if (!linkConvite) return;
+    try {
+      await navigator.clipboard.writeText(linkConvite);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      setMsg({ tipo: "erro", texto: "Não foi possível copiar. Selecione e copie manualmente." });
+    }
   };
 
   return (
@@ -152,7 +193,7 @@ export default function AdminUsuarios() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-200 bg-zinc-50">
-              {["Usuário", "Email", "Perfil", "Status", ""].map((h) => (
+              {["Usuário", "Email", "Perfil", "Status", "Acesso", ""].map((h) => (
                 <th
                   key={h}
                   className="text-left px-4 py-3 text-xs font-semibold text-[#3B2415]/60 uppercase tracking-wide"
@@ -166,7 +207,7 @@ export default function AdminUsuarios() {
             {carregando
               ? Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i} className="border-b border-zinc-100">
-                    <td colSpan={5} className="px-4 py-4">
+                    <td colSpan={6} className="px-4 py-4">
                       <div className="h-5 bg-zinc-100 rounded animate-pulse" />
                     </td>
                   </tr>
@@ -174,7 +215,7 @@ export default function AdminUsuarios() {
               : usuarios.length === 0
               ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-16 text-center text-zinc-400 text-sm">
+                    <td colSpan={6} className="px-4 py-16 text-center text-zinc-400 text-sm">
                       Nenhum usuário cadastrado.
                     </td>
                   </tr>
@@ -215,8 +256,27 @@ export default function AdminUsuarios() {
                         {u.ativo ? "Ativo" : "Inativo"}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {u.senhaDefinida ? (
+                        <span className="text-xs text-zinc-400">—</span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                          Convite pendente
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {!u.senhaDefinida && (
+                          <button
+                            onClick={() => reenviarConvite(u.id)}
+                            disabled={reenviandoId === u.id}
+                            className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                            title="Reenviar convite"
+                          >
+                            🔗
+                          </button>
+                        )}
                         <button
                           onClick={() => abrirEditar(u)}
                           className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
@@ -304,18 +364,24 @@ export default function AdminUsuarios() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
-                  Senha {editandoId ? "(deixe em branco para manter)" : "*"}
-                </label>
-                <input
-                  type="password"
-                  value={form.senha}
-                  onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
-                  className={inputClass}
-                  placeholder={editandoId ? "••••••••" : "Mínimo 6 caracteres"}
-                />
-              </div>
+              {editandoId ? (
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
+                    Senha (deixe em branco para manter)
+                  </label>
+                  <input
+                    type="password"
+                    value={form.senha}
+                    onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
+                    className={inputClass}
+                    placeholder="••••••••"
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5">
+                  Ao criar, geramos um link de convite pra esse funcionário criar a própria senha.
+                </p>
+              )}
 
               <div>
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
@@ -370,9 +436,47 @@ export default function AdminUsuarios() {
                 className="font-bold px-6 py-2.5 rounded-xl text-sm disabled:opacity-50 shadow-sm hover:opacity-90 transition-opacity"
                 style={{ background: "#3B2415", color: "#F6F0E5" }}
               >
-                {salvando ? "Salvando..." : editandoId ? "Salvar Alterações" : "Criar Usuário"}
+                {salvando
+                  ? editandoId ? "Salvando..." : "Gerando..."
+                  : editandoId ? "Salvar Alterações" : "Gerar link de convite"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {linkConvite && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-zinc-900">Convite gerado!</h2>
+              <button
+                onClick={() => setLinkConvite(null)}
+                className="text-zinc-400 hover:text-zinc-700 text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={linkConvite}
+                onFocus={(e) => e.target.select()}
+                className="flex-1 min-w-0 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-xs text-zinc-700"
+              />
+              <button
+                onClick={copiarLink}
+                className="shrink-0 font-bold px-4 py-2.5 rounded-xl text-sm shadow-sm hover:opacity-90 transition-opacity"
+                style={{ background: "#3B2415", color: "#F6F0E5" }}
+              >
+                {copiado ? "Copiado!" : "Copiar link"}
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-500">
+              Envie este link ao funcionário pelo WhatsApp. Ele expira em 7 dias.
+            </p>
           </div>
         </div>
       )}
