@@ -24,11 +24,39 @@ function IdentificacaoConteudo() {
   const [wpp, setWpp]         = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState("");
+  const [buscando, setBuscando]       = useState(false);
+  const [reconhecido, setReconhecido] = useState(false);
   const nomeRef = useRef<HTMLInputElement>(null);
+  const ultimoBuscadoRef = useRef("");
 
   useEffect(function() {
     nomeRef.current?.focus();
   }, []);
+
+  useEffect(function() {
+    var nums = wpp.replace(/\D/g, "");
+    if (nums.length < 10) {
+      setReconhecido(false);
+      ultimoBuscadoRef.current = "";
+      return;
+    }
+    if (nums === ultimoBuscadoRef.current) return;
+    ultimoBuscadoRef.current = nums;
+
+    var wppInternacional = "55" + nums;
+    setBuscando(true);
+    setReconhecido(false);
+    fetch("/api/clientes/buscar?empresaId=" + EMPRESA_ID + "&whatsapp=" + wppInternacional)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          setNome(d.data.nome);
+          setReconhecido(true);
+        }
+      })
+      .catch(function() {})
+      .finally(function() { setBuscando(false); });
+  }, [wpp]);
 
   var destino = mesaId ? "/cardapio?mesa=" + mesaId : "/cardapio";
 
@@ -112,7 +140,11 @@ function IdentificacaoConteudo() {
             Bem-vindo!
           </h1>
           <p className="text-cb-marrom/60 text-base mt-1">
-            Como podemos te chamar?
+            {reconhecido
+              ? "Olá, " + nome + "! Bem-vindo de volta 👋"
+              : buscando
+              ? "Verificando..."
+              : "Como podemos te chamar?"}
           </p>
         </div>
 
