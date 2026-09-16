@@ -171,7 +171,10 @@ export async function criarCheckout(params: {
       currency:           "BRL",
       merchant_code:      process.env.SUMUP_MERCHANT_CODE,
       description:        params.descricao,
-      return_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/pagamentos/sumup/callback`,
+      // return_url é o mecanismo real de notificação do SumUp (não há endpoint de
+      // cadastro de webhook na API pública) — precisa apontar para o webhook, não
+      // para uma rota de redirect de navegador.
+      return_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/pagamentos/sumup/webhook`,
     }),
     cache: "no-store",
   });
@@ -196,6 +199,7 @@ export async function criarCheckout(params: {
 export async function verificarCheckout(checkoutId: string): Promise<{
   status: "PENDING" | "PAID" | "FAILED" | "EXPIRED";
   transaction_code?: string;
+  checkout_reference?: string;
 }> {
   const token = await getAccessToken();
 
@@ -204,9 +208,14 @@ export async function verificarCheckout(checkoutId: string): Promise<{
     cache:   "no-store",
   });
 
-  const data = await res.json() as { status?: string; transaction_code?: string };
+  const data = await res.json() as {
+    status?: string;
+    transaction_code?: string;
+    checkout_reference?: string;
+  };
   return {
-    status:           (data.status ?? "PENDING") as "PENDING" | "PAID" | "FAILED" | "EXPIRED",
-    transaction_code: data.transaction_code ?? undefined,
+    status:             (data.status ?? "PENDING") as "PENDING" | "PAID" | "FAILED" | "EXPIRED",
+    transaction_code:   data.transaction_code ?? undefined,
+    checkout_reference: data.checkout_reference ?? undefined,
   };
 }
