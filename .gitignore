@@ -48,3 +48,6 @@ next-env.d.ts
 
 # capacitor (projeto Android local — não vai para Vercel)
 capacitor-app/
+
+.vercel
+.env*
