@@ -50,13 +50,17 @@ export async function POST(req: NextRequest) {
     const canal = await prisma.canalVenda.findFirst({ where: { nome: nomeCanalBuscado } });
     if (!canal) return erroResposta("Canal de venda não encontrado no banco", 400);
 
-    const config = await prisma.configuracao.findUnique({ where: { empresaId } });
+    // Increment atômico: mesma sequência de senhas do totem, sem risco de número duplicado
+    const config = await prisma.configuracao
+      .update({
+        where:  { empresaId },
+        data:   { senhaAtual: { increment: 1 } },
+        select: { senhaAtual: true, prefixoSenha: true },
+      })
+      .catch(() => null);
     if (!config) return erroResposta("Configuração da empresa não encontrada", 500);
 
-    const novaSenha = config.senhaAtual + 1;
-    await prisma.configuracao.update({ where: { empresaId }, data: { senhaAtual: novaSenha } });
-
-    const senha = `${config.prefixoSenha}-${novaSenha}`;
+    const senha = `${config.prefixoSenha}-${config.senhaAtual}`;
 
     // Para itens externos, não há produtoId local — criamos um pedido sem itens Prisma reais
     // e armazenamos os itens no campo observacao (JSON).

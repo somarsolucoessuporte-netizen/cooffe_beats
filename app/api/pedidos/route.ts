@@ -44,22 +44,21 @@ export async function POST(req: NextRequest) {
     const { empresaId, itens, observacao, clienteId, mesaId, status, cupomId, valorDesconto, canalVendaId } = validacao.data;
 
     const pedido = await prisma.$transaction(async (tx) => {
-      // Gerar senha sequencial
-      const config = await tx.configuracao.findUnique({
-        where: { empresaId },
-      });
+      // Gerar senha sequencial — increment atômico (UPDATE ... SET senhaAtual = senhaAtual + 1)
+      // trava a linha e evita que dois pedidos simultâneos leiam o mesmo valor e saiam com a mesma senha
+      const config = await tx.configuracao
+        .update({
+          where: { empresaId },
+          data: { senhaAtual: { increment: 1 } },
+          select: { senhaAtual: true, prefixoSenha: true },
+        })
+        .catch(() => null);
 
       if (!config) {
         throw new Error("Configuração da empresa não encontrada");
       }
 
-      const novaSenha = config.senhaAtual + 1;
-      await tx.configuracao.update({
-        where: { empresaId },
-        data: { senhaAtual: novaSenha },
-      });
-
-      const senha = `${config.prefixoSenha}-${novaSenha}`;
+      const senha = `${config.prefixoSenha}-${config.senhaAtual}`;
 
       // Vincular ao caixa aberto (se existir)
       const caixaAberto = await tx.caixa.findFirst({

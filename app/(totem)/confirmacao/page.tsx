@@ -27,10 +27,12 @@ interface ItemDoPedido {
 function ConfirmacaoConteudo() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const senha    = searchParams.get("senha")   ?? "CB-???";
+  // Senha da URL é só o valor inicial; a fonte da verdade é pedido.senha do banco
+  const senhaUrl = searchParams.get("senha")   ?? "CB-???";
   const pedidoId = searchParams.get("id")     ?? "";
   const isComanda = searchParams.get("comanda") === "1";
 
+  const [senha, setSenha]                     = useState(senhaUrl);
   const [progresso, setProgresso]             = useState(100);
   const [statusAtual, setStatusAtual]         = useState("RECEBIDO");
   const [itensPedido, setItensPedido]         = useState<ItemDoPedido[]>([]);
@@ -67,6 +69,7 @@ function ConfirmacaoConteudo() {
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (!d.ok) return;
+        if (d.data.senha) setSenha(d.data.senha);
         setStatusAtual(d.data.status);
         setItensPedido(d.data.itens ?? []);
         setTotalPedido(Number(d.data.total ?? 0));
@@ -129,20 +132,6 @@ function ConfirmacaoConteudo() {
     window.open(url, "_blank");
   }
 
-  function handleImprimir() {
-    playClick();
-    var itens = buildItens();
-
-    printCupom({ numeroPedido: senha, itens, total: totalPedido,
-                 nomeCliente: nomeCliente, metodoPagamento: metodoPagamento, via: "CLIENTE" })
-      .catch(function() {});
-
-    setTimeout(function() {
-      printCupom({ numeroPedido: senha, itens, total: totalPedido, via: "COZINHA" })
-        .catch(function() {});
-    }, 500);
-  }
-
   async function handleReimprimir(via: "CLIENTE" | "COZINHA") {
     playClick();
     var setStatus = via === "CLIENTE" ? setStatusReimprimirCliente : setStatusReimprimirCozinha;
@@ -172,163 +161,131 @@ function ConfirmacaoConteudo() {
     return textoOriginal;
   }
 
+  // Botão de impressão com feedback (imprimindo / impresso / falha); flex-1 ocupa largura total se estiver sozinho
+  function botaoImpressao(via: "CLIENTE" | "COZINHA", status: StatusImpressao, texto: string) {
+    var falhou = status === "error";
+    return (
+      <button
+        key={via}
+        onClick={function() { handleReimprimir(via); }}
+        disabled={status === "printing"}
+        className={
+          "flex-1 min-h-[56px] flex items-center justify-center gap-2 border-2 rounded-2xl px-3 py-3 " +
+          "touch-manipulation active:scale-95 transition-transform disabled:opacity-70 " +
+          "font-bold text-[18px] leading-tight " +
+          (falhou ? "bg-red-50 border-red-500 text-red-600" : "bg-[#F5ECD7] border-[#3B2415] text-[#3B2415]")
+        }
+      >
+        {status === "printing" && (
+          <span className="w-6 h-6 shrink-0 rounded-full border-4 border-[#3B2415]/20 border-t-[#3B2415] animate-spin" />
+        )}
+        <span>{textoBotaoReimprimir(status, texto)}</span>
+      </button>
+    );
+  }
+
   var info = STATUS_INFO[statusAtual] ?? STATUS_INFO.RECEBIDO;
 
   return (
-    <main className="h-full flex flex-col items-center justify-center gap-8 px-8 text-center animate-fadeIn">
-      {/* Check */}
-      <div className="check-circle">
-        <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-          <circle cx="60" cy="60" r="56" fill="#F6F0E5" stroke="#C8853A" strokeWidth="4" />
-          <path
-            className="check-path"
-            d="M30 62 L50 82 L90 40"
-            stroke="#3B2415"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
+    <main className="h-full max-h-dvh overflow-y-auto overscroll-contain px-4 py-6 sm:px-8 text-center animate-fadeIn">
+      <div className="min-h-full flex flex-col items-center justify-center">
+        <div className="w-full max-w-lg flex shrink-0 flex-col items-center gap-5 [@media(min-height:900px)]:gap-7">
+          {/* 1. Ícone de status animado */}
+          <div className="check-circle">
+            <svg className="w-16 h-16 [@media(min-height:900px)]:w-24 [@media(min-height:900px)]:h-24" width="120" height="120" viewBox="0 0 120 120" fill="none">
+              <circle cx="60" cy="60" r="56" fill="#F6F0E5" stroke="#C8853A" strokeWidth="4" />
+              <path
+                className="check-path"
+                d="M30 62 L50 82 L90 40"
+                stroke="#3B2415"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
 
-      {/* Senha */}
-      <div className="flex flex-col items-center gap-3">
-        <p className="text-cb-marrom/60 text-lg">Seu número de pedido</p>
-        <div className="font-mono text-7xl text-cb-marrom bg-white rounded-3xl px-8 py-5
-                        border border-cb-marrom/10 tracking-widest shadow-sm">
-          {senha}
-        </div>
-      </div>
+          {/* 2 e 3. Label + número do pedido (pedido.senha do banco) */}
+          <div className="w-full flex flex-col items-center gap-2">
+            <p className="text-cb-marrom/60 text-base">Seu número de pedido</p>
+            <div className="max-w-full break-all font-mono text-5xl sm:text-6xl [@media(min-height:900px)]:text-7xl text-cb-marrom bg-white rounded-3xl px-6 py-3 sm:px-8
+                            border border-cb-marrom/10 tracking-widest shadow-sm">
+              {senha}
+            </div>
+          </div>
 
-      {/* Status em tempo real */}
-      <div className={"flex items-center gap-3 text-2xl font-extrabold transition-all " + info.cor +
-                      (statusAtual === "PRONTO" ? " animate-pulse" : "")}>
-        <span>{info.icone}</span>
-        <span>{info.texto}</span>
-      </div>
+          {/* 4. Status em tempo real */}
+          <div className={"flex items-center gap-3 text-xl sm:text-2xl font-extrabold transition-all " + info.cor +
+                          (statusAtual === "PRONTO" ? " animate-pulse" : "")}>
+            <span>{info.icone}</span>
+            <span>{info.texto}</span>
+          </div>
 
-      {/* Barra de progresso */}
-      <div className="w-full max-w-sm bg-cb-marrom/10 rounded-full h-3 overflow-hidden">
-        <div
-          className="h-full bg-cb-amber rounded-full transition-all duration-1000 ease-linear"
-          style={{ width: progresso + "%" }}
-        />
-      </div>
+          {/* 5. Previsão de tempo */}
+          <div className="w-full max-w-sm flex flex-col items-center gap-2">
+            <div className="w-full bg-cb-marrom/10 rounded-full h-3 overflow-hidden">
+              <div
+                className="h-full bg-cb-amber rounded-full transition-all duration-1000 ease-linear"
+                style={{ width: progresso + "%" }}
+              />
+            </div>
+            <p className="text-cb-marrom/50 text-base">Previsão: ~5 minutos</p>
+          </div>
 
-      <p className="text-cb-marrom/50 text-base">Previsão: ~5 minutos</p>
-
-      {/* Botões de ação — navegação */}
-      <div className="flex gap-4 mt-2">
-        {!isMesa && (
-          <button
-            onClick={function() { playClick(); router.push("/"); }}
-            className="bg-cb-marrom text-cb-bege font-extrabold font-sans text-lg
-                       py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
-          >
-            🏠 Início
-          </button>
-        )}
-        <button
-          onClick={function() { playClick(); router.push("/cardapio"); }}
-          className="bg-cb-amber text-white font-extrabold font-sans text-lg
-                     py-4 px-8 rounded-full touch-manipulation btn-totem min-h-[64px]"
-        >
-          {isMesa ? "☕ Fazer mais pedidos" : "☕ Novo Pedido"}
-        </button>
-      </div>
-
-      {/* Comanda: mensagem de orientação */}
-      {isComanda && (
-        <div className="bg-cb-amber/10 border border-cb-amber/30 rounded-2xl px-6 py-4 text-center max-w-sm w-full">
-          <p className="text-cb-marrom font-bold text-base">🪑 Comanda aberta</p>
-          <p className="text-cb-marrom/60 text-sm mt-1">
-            Pague ao balcão quando quiser sair.<br />
-            Pode pedir mais itens quando quiser!
-          </p>
-        </div>
-      )}
-
-      {/* Escolha do comprovante — apenas no modo normal (não comanda) */}
-      {!isComanda && impressaoAtiva && itensPedido.length > 0 && (
-        <div className="flex gap-4 w-full max-w-sm">
-          {telefoneCliente && (
-            <button
-              onClick={handleWhatsApp}
-              className="flex-1 flex flex-col items-center gap-2 bg-[#F5ECD7] border-2 border-[#16a34a]
-                         rounded-2xl px-4 py-5 touch-manipulation active:scale-95 transition-transform"
-            >
-              <span className="text-4xl">📱</span>
-              <span className="font-bold text-[#16a34a] text-sm leading-tight">Receber no</span>
-              <span className="font-bold text-[#16a34a] text-sm leading-tight">WhatsApp</span>
-            </button>
+          {/* Comanda: mensagem de orientação */}
+          {isComanda && (
+            <div className="bg-cb-amber/10 border border-cb-amber/30 rounded-2xl px-6 py-4 text-center w-full">
+              <p className="text-cb-marrom font-bold text-base">🪑 Comanda aberta</p>
+              <p className="text-cb-marrom/60 text-sm mt-1">
+                Pague ao balcão quando quiser sair.<br />
+                Pode pedir mais itens quando quiser!
+              </p>
+            </div>
           )}
-          <button
-            onClick={handleImprimir}
-            className="flex-1 flex flex-col items-center gap-2 bg-[#F5ECD7] border-2 border-[#3B2415]
-                       rounded-2xl px-4 py-5 touch-manipulation active:scale-95 transition-transform"
-          >
-            <span className="text-4xl">🖨️</span>
-            <span className="font-bold text-[#3B2415] text-sm leading-tight">Imprimir</span>
-            <span className="font-bold text-[#3B2415] text-sm leading-tight">aqui</span>
-          </button>
-        </div>
-      )}
 
-      {/* Segunda via — reimpressão avulsa do cupom */}
-      {!isComanda && impressaoAtiva && itensPedido.length > 0 && (
-        <div className="flex gap-4 w-full max-w-sm">
-          <button
-            onClick={function() { handleReimprimir("CLIENTE"); }}
-            disabled={statusReimprimirCliente === "printing"}
-            className={
-              "flex-1 flex flex-col items-center gap-2 border-2 rounded-2xl px-4 py-4 " +
-              "touch-manipulation active:scale-95 transition-transform disabled:opacity-70 " +
-              (statusReimprimirCliente === "error"
-                ? "bg-red-50 border-red-500"
-                : "bg-[#F5ECD7] border-[#3B2415]")
-            }
-          >
-            {statusReimprimirCliente === "printing" ? (
-              <span className="w-8 h-8 rounded-full border-4 border-[#3B2415]/20 border-t-[#3B2415] animate-spin" />
-            ) : (
-              <span className="text-3xl">🖨️</span>
+          {/* 6. Botões de ação principais — lado a lado, mesma largura */}
+          <div className="flex gap-3 w-full">
+            {!isMesa && (
+              <button
+                onClick={function() { playClick(); router.push("/"); }}
+                className="flex-1 bg-cb-marrom text-cb-bege font-extrabold font-sans text-[18px]
+                           py-3 px-4 rounded-full touch-manipulation btn-totem min-h-[56px]"
+              >
+                🏠 Início
+              </button>
             )}
-            <span
-              className={
-                "font-bold text-xs leading-tight " +
-                (statusReimprimirCliente === "error" ? "text-red-600" : "text-[#3B2415]")
-              }
+            <button
+              onClick={function() { playClick(); router.push("/cardapio"); }}
+              className="flex-1 bg-cb-amber text-white font-extrabold font-sans text-[18px]
+                         py-3 px-4 rounded-full touch-manipulation btn-totem min-h-[56px]"
             >
-              {textoBotaoReimprimir(statusReimprimirCliente, "Reimprimir via cliente")}
-            </span>
-          </button>
-          <button
-            onClick={function() { handleReimprimir("COZINHA"); }}
-            disabled={statusReimprimirCozinha === "printing"}
-            className={
-              "flex-1 flex flex-col items-center gap-2 border-2 rounded-2xl px-4 py-4 " +
-              "touch-manipulation active:scale-95 transition-transform disabled:opacity-70 " +
-              (statusReimprimirCozinha === "error"
-                ? "bg-red-50 border-red-500"
-                : "bg-[#F5ECD7] border-[#3B2415]")
-            }
-          >
-            {statusReimprimirCozinha === "printing" ? (
-              <span className="w-8 h-8 rounded-full border-4 border-[#3B2415]/20 border-t-[#3B2415] animate-spin" />
-            ) : (
-              <span className="text-3xl">🖨️</span>
-            )}
-            <span
-              className={
-                "font-bold text-xs leading-tight " +
-                (statusReimprimirCozinha === "error" ? "text-red-600" : "text-[#3B2415]")
-              }
-            >
-              {textoBotaoReimprimir(statusReimprimirCozinha, "Reimprimir via cozinha")}
-            </span>
-          </button>
+              {isMesa ? "☕ Fazer mais pedidos" : "☕ Novo Pedido"}
+            </button>
+          </div>
+
+          {/* 7. Seção de impressão — card único */}
+          {impressaoAtiva && itensPedido.length > 0 && (
+            <div className="w-full bg-white/60 border border-cb-marrom/10 rounded-3xl p-4 flex flex-col gap-3 mt-2">
+              <div className="flex gap-3 w-full">
+                {/* Comanda (mesa) não tem via do cliente: só a comanda fica, em largura total */}
+                {!isComanda && botaoImpressao("CLIENTE", statusReimprimirCliente, "🖨️ Imprimir comprovante")}
+                {botaoImpressao("COZINHA", statusReimprimirCozinha, "🖨️ Imprimir comanda")}
+              </div>
+
+              {!isComanda && telefoneCliente && (
+                <button
+                  onClick={handleWhatsApp}
+                  className="w-full min-h-[56px] flex items-center justify-center gap-2 bg-[#F5ECD7]
+                             border-2 border-[#16a34a] rounded-2xl px-4 py-3 touch-manipulation
+                             active:scale-95 transition-transform font-bold text-[#16a34a] text-[18px]"
+                >
+                  📱 Receber no WhatsApp
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </main>
   );
 }

@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 interface PedidoFila {
   id: string;
   senha: string;
-  status: "EM_PREPARO" | "PRONTO";
+  status: "RECEBIDO" | "EM_PREPARO" | "PRONTO";
 }
 
 export default function FilaDeSenhas() {
@@ -62,7 +62,8 @@ export default function FilaDeSenhas() {
     };
   }, [empresaId, buscar]);
 
-  var emPreparo = pedidos.filter(function(p) { return p.status === "EM_PREPARO"; });
+  // RECEBIDO entra na coluna "Em Preparo" — mesma senha que o cliente vê na confirmação e no KDS
+  var emPreparo = pedidos.filter(function(p) { return p.status === "RECEBIDO" || p.status === "EM_PREPARO"; });
   var prontos   = pedidos.filter(function(p) { return p.status === "PRONTO"; });
 
   return (

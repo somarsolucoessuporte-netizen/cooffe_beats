@@ -21,7 +21,8 @@ export default function SidebarCategorias({
   onChange,
 }: SidebarCategoriasProps) {
   return (
-    <aside className="w-40 h-full shrink-0 bg-cb-marrom flex flex-col">
+    // Largura maior pra caber fonte 18px + ícone 28px no touch do SUNMI D2 Mini
+    <aside className="w-52 h-full shrink-0 bg-cb-marrom flex flex-col">
       <div className="flex items-center gap-2 px-3 py-4 border-b border-white/10 shrink-0">
         <span className="text-lg">☕</span>
         <span className="font-sans font-extrabold text-[11px] text-cb-bege leading-tight">
@@ -29,7 +30,9 @@ export default function SidebarCategorias({
         </span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto totem-scroll flex flex-col py-1">
+      {/* Scroll suave + inércia no touch para listas longas de categorias */}
+      <nav className="flex-1 overflow-y-auto overscroll-contain scroll-smooth [-webkit-overflow-scrolling:touch]
+                      totem-scroll flex flex-col gap-1 py-1">
         {categorias.map((cat) => {
           const ativa = categoriaAtiva === cat.id;
           return (
@@ -37,9 +40,9 @@ export default function SidebarCategorias({
               key={cat.id}
               onClick={() => { playClick(); onChange(cat.id); }}
               className={`
-                flex items-center gap-2 text-left py-[7px] px-[14px]
-                text-[10px] font-sans font-semibold whitespace-nowrap
-                border-l-2 touch-manipulation btn-totem transition-colors
+                flex items-center gap-3 text-left min-h-[56px] py-[14px] px-[14px]
+                text-[18px] leading-tight font-sans font-semibold
+                border-l-4 touch-manipulation btn-totem transition-colors
                 ${
                   ativa
                     ? "border-cb-gold bg-cb-gold/10 text-cb-bege"
@@ -47,8 +50,9 @@ export default function SidebarCategorias({
                 }
               `}
             >
-              <span className="text-xs">{cat.emoji}</span>
-              <span className="truncate">{cat.nome}</span>
+              <span className="text-[28px] leading-none shrink-0">{cat.emoji}</span>
+              {/* Quebra em até 2 linhas em vez de cortar o nome */}
+              <span className="line-clamp-2 break-words">{cat.nome}</span>
             </button>
           );
         })}

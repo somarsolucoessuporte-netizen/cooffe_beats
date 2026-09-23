@@ -7,8 +7,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "empresaId obrigatório" }, { status: 400 });
   }
 
+  // Inclui RECEBIDO (mesmo conjunto do KDS) para a senha aparecer no visor assim que o
+  // cliente vê a confirmação. RECEBIDO limitado às últimas 12h pra não exibir pedidos abandonados.
+  const desde = new Date(Date.now() - 12 * 60 * 60 * 1000);
   const pedidos = await prisma.pedido.findMany({
-    where: { empresaId, status: { in: ["EM_PREPARO", "PRONTO"] } },
+    where: {
+      empresaId,
+      OR: [
+        { status: { in: ["EM_PREPARO", "PRONTO"] } },
+        { status: "RECEBIDO", criadoEm: { gte: desde } },
+      ],
+    },
     select: { id: true, senha: true, status: true, criadoEm: true },
     orderBy: { criadoEm: "asc" },
   });
