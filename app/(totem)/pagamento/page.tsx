@@ -59,100 +59,62 @@ function QRFakeDemo() {
   );
 }
 
-// Teclado numérico de PIN do atendente — envia ao completar 4 dígitos
-function TecladoPin({ onConfirmar, onFechar }: {
-  onConfirmar: (pin: string) => Promise<void>;
+// Confirmação dupla do atendente antes de liberar o pedido pago na maquininha
+function ModalConfirmacaoManual({ onConfirmar, onFechar }: {
+  onConfirmar: () => Promise<void>;
   onFechar: () => void;
 }) {
-  const [pin, setPin]           = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [erroPin, setErroPin]   = useState<string | null>(null);
+  const [erroModal, setErroModal] = useState<string | null>(null);
 
-  async function digitar(d: string) {
-    if (enviando || pin.length >= 4) return;
+  async function confirmar() {
+    if (enviando) return;
     playClick();
-    setErroPin(null);
-    var novo = pin + d;
-    setPin(novo);
-    if (novo.length < 4) return;
-
     setEnviando(true);
+    setErroModal(null);
     try {
-      await onConfirmar(novo);
+      await onConfirmar();
     } catch(err) {
-      setErroPin(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
-      setPin("");
+      setErroModal(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
       setEnviando(false);
     }
   }
 
-  function apagar() {
-    if (enviando) return;
-    playClick();
-    setPin(function(p) { return p.slice(0, -1); });
-  }
-
-  var teclas = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6" onClick={onFechar}>
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6" onClick={enviando ? undefined : onFechar}>
       <div
-        className="bg-white rounded-3xl p-8 w-full max-w-sm flex flex-col items-center gap-5 shadow-xl"
+        className="bg-white rounded-2xl p-8 w-full max-w-md flex flex-col gap-4 shadow-xl"
         onClick={function(e) { e.stopPropagation(); }}
       >
-        <p className="font-extrabold text-cb-marrom text-xl text-center">Confirmar pagamento recebido</p>
-        <p className="text-cb-marrom/60 text-sm text-center -mt-3">Digite o PIN do atendente</p>
-
-        <div className="flex gap-4">
-          {[0, 1, 2, 3].map(function(i) {
-            return (
-              <span
-                key={i}
-                className={"w-4 h-4 rounded-full border-2 border-cb-marrom " + (i < pin.length ? "bg-cb-marrom" : "")}
-              />
-            );
-          })}
-        </div>
-
-        <p className={"text-sm h-5 " + (erroPin ? "text-red-600" : "text-cb-marrom/60")}>
-          {enviando ? "Confirmando..." : erroPin ?? ""}
+        <p className="font-extrabold text-cb-marrom text-2xl text-center">Pagamento recebido?</p>
+        <p className="text-cb-marrom/70 text-base text-center">
+          Confirme que o cliente realizou o pagamento na maquininha antes de liberar o pedido.
         </p>
 
-        <div className="grid grid-cols-3 gap-3 w-full">
-          {teclas.map(function(d) {
-            return (
-              <button
-                key={d}
-                onClick={function() { digitar(d); }}
-                disabled={enviando}
-                className="h-16 rounded-2xl bg-cb-bege text-cb-marrom font-extrabold text-2xl
-                           touch-manipulation active:scale-95 disabled:opacity-60"
-              >
-                {d}
-              </button>
-            );
-          })}
+        {erroModal && (
+          <p className="text-red-600 text-sm text-center">{erroModal}</p>
+        )}
+
+        <div className="flex flex-col gap-3 mt-2">
           <button
-            onClick={onFechar}
+            onClick={confirmar}
             disabled={enviando}
-            className="h-16 rounded-2xl text-cb-marrom/70 font-bold text-sm touch-manipulation disabled:opacity-60"
+            className="h-14 rounded-xl bg-cb-confirma text-white font-bold text-lg
+                       touch-manipulation active:scale-95 disabled:opacity-60
+                       flex items-center justify-center gap-2"
           >
-            Fechar
+            {enviando && (
+              <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
+            {enviando ? "Liberando..." : "✅ Sim, liberar pedido"}
           </button>
           <button
-            onClick={function() { digitar("0"); }}
+            onClick={function() { playClick(); onFechar(); }}
             disabled={enviando}
-            className="h-16 rounded-2xl bg-cb-bege text-cb-marrom font-extrabold text-2xl
+            className="h-14 rounded-xl bg-transparent border-2 border-gray-300 text-cb-marrom font-bold text-lg
                        touch-manipulation active:scale-95 disabled:opacity-60"
           >
-            0
-          </button>
-          <button
-            onClick={apagar}
-            disabled={enviando}
-            className="h-16 rounded-2xl text-cb-marrom font-bold text-2xl touch-manipulation disabled:opacity-60"
-          >
-            ⌫
+            Cancelar
           </button>
         </div>
       </div>
@@ -179,7 +141,7 @@ export default function Pagamento() {
   const [tempoRestante, setTempoRestante] = useState(600);
   // Cobrança SumUp não pôde ser criada: cliente paga direto na maquininha
   const [semCobranca, setSemCobranca]   = useState(false);
-  const [pinAberto, setPinAberto]       = useState(false);
+  const [modalManual, setModalManual]   = useState(false);
   const [cancelando, setCancelando]     = useState(false);
 
   const pedidoRef   = useRef<{ id: string; senha: string } | null>(null);
@@ -223,7 +185,7 @@ export default function Pagamento() {
     }, 1000);
   }
 
-  // Pagamento aprovado (webhook, PIN do atendente ou simulação): imprime
+  // Pagamento aprovado (webhook, confirmação do atendente ou simulação): imprime
   // comprovante + comanda e segue para a confirmação com a senha
   function finalizar(metodo: string) {
     if (!pedidoRef.current) return;
@@ -295,7 +257,7 @@ export default function Pagamento() {
 
     timeoutRef.current = setTimeout(function() {
       pararPolling();
-      setPinAberto(false);
+      setModalManual(false);
       cancelarPedidoPendente().then(function(jaAprovado) {
         if (jaAprovado) { finalizar(metodoRef.current); return; }
         pedidoRef.current = null;
@@ -313,7 +275,7 @@ export default function Pagamento() {
 
         if (statusData.status === "APROVADO") {
           pararPolling();
-          setPinAberto(false);
+          setModalManual(false);
           finalizar(metodoRef.current);
         } else if (
           statusData.status === "RECUSADO" ||
@@ -321,7 +283,7 @@ export default function Pagamento() {
           statusData.status === "ESTORNADO"
         ) {
           pararPolling();
-          setPinAberto(false);
+          setModalManual(false);
           cancelarPedidoPendente();
           pedidoRef.current = null;
           setErro("Pagamento recusado ou expirado. Tente novamente.");
@@ -332,19 +294,19 @@ export default function Pagamento() {
   }
 
   // Fallback manual: cliente pagou direto na maquininha e o atendente confirma
-  // com PIN. Lança erro com a mensagem da API (ex.: "PIN incorreto") para o teclado.
-  async function confirmarManualmente(pin: string) {
+  // no modal de confirmação dupla. Lança erro com a mensagem da API para o modal.
+  async function confirmarManualmente() {
     if (!pedidoRef.current) return;
     var res   = await fetch("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ pin, metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO" }),
+      body:    JSON.stringify({ metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO" }),
     });
     var dados = await res.json();
     if (!dados.ok) throw new Error(dados.error ?? "Erro ao confirmar pagamento");
 
     pararPolling();
-    setPinAberto(false);
+    setModalManual(false);
     finalizar(metodoRef.current);
   }
 
@@ -393,7 +355,7 @@ export default function Pagamento() {
 
     var pedido: { id: string; senha: string };
     try {
-      // Só entra no KDS quando o pagamento for aprovado (webhook ou PIN do atendente)
+      // Só entra no KDS quando o pagamento for aprovado (webhook ou confirmação do atendente)
       pedido = await criarPedido("AGUARDANDO_PAGAMENTO");
       pedidoRef.current = pedido;
     } catch(err) {
@@ -438,7 +400,7 @@ export default function Pagamento() {
       }
     } catch(err) {
       // Sem cobrança na SumUp (ex.: scope payments ainda não liberado): o cliente
-      // paga direto na maquininha e o atendente confirma com PIN. Polling segue
+      // paga direto na maquininha e o atendente confirma manualmente. Polling segue
       // ativo caso o pagamento seja aprovado por outro caminho.
       console.warn("[Pagamento] Cobrança SumUp não criada:", err instanceof Error ? err.message : err);
       setSemCobranca(true);
@@ -485,7 +447,7 @@ export default function Pagamento() {
     playClick();
     setCancelando(true);
     pararTudo();
-    setPinAberto(false);
+    setModalManual(false);
 
     var jaAprovado = await cancelarPedidoPendente();
     if (jaAprovado) { finalizar(metodoRef.current); return; }
@@ -502,8 +464,8 @@ export default function Pagamento() {
   }
 
   // Rodapé comum às telas de aguardo: cancelar (esquerda) + confirmação manual
-  // do atendente (canto inferior direito, discreta, protegida por PIN)
-  // Chamado como função (não <Componente />) para o TecladoPin não remontar a cada tick do timer
+  // do atendente (canto inferior direito, discreta, com confirmação dupla)
+  // Chamado como função (não <Componente />) para o modal não remontar a cada tick do timer
   function acoesAguardo() {
     return (
       <>
@@ -517,17 +479,17 @@ export default function Pagamento() {
         </button>
 
         <button
-          onClick={function() { playClick(); setPinAberto(true); }}
+          onClick={function() { playClick(); setModalManual(true); }}
           className="fixed bottom-5 right-5 z-40 bg-cb-confirma text-white text-sm font-semibold
                      py-2.5 px-4 rounded-xl shadow-md touch-manipulation opacity-90 active:scale-95"
         >
           ✓ Confirmar pagamento recebido
         </button>
 
-        {pinAberto && (
-          <TecladoPin
+        {modalManual && (
+          <ModalConfirmacaoManual
             onConfirmar={confirmarManualmente}
-            onFechar={function() { setPinAberto(false); }}
+            onFechar={function() { setModalManual(false); }}
           />
         )}
       </>

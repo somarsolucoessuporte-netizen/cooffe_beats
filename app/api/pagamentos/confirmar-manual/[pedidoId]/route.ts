@@ -4,17 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
 
 const Schema = z.object({
-  pin:    z.string(),
   metodo: z.enum(["PIX", "CARTAO"]),
 });
-
-// PIN do atendente — padrão 1234 até existir tela de configuração
-const PIN_CONFIRMACAO = process.env.PIN_CONFIRMACAO_MANUAL ?? "1234";
 
 /**
  * POST /api/pagamentos/confirmar-manual/[pedidoId]
  * Fallback manual enquanto a maquininha SumUp não recebe a cobrança pela API:
- * o cliente paga direto na maquininha e o atendente confirma com PIN no totem.
+ * o cliente paga direto na maquininha e o atendente confirma no totem (confirmação dupla).
  * O pedido sai de AGUARDANDO_PAGAMENTO para RECEBIDO (entra no KDS) e o pagamento
  * fica APROVADO com `confirmadoManualmente`. Se o webhook já aprovou, não altera nada.
  */
@@ -29,11 +25,7 @@ export async function POST(
     if (!validacao.success) {
       return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 });
     }
-    const { pin, metodo } = validacao.data;
-
-    if (pin !== PIN_CONFIRMACAO) {
-      return NextResponse.json({ ok: false, error: "PIN incorreto" }, { status: 401 });
-    }
+    const { metodo } = validacao.data;
 
     const pedido = await prisma.pedido.findUnique({
       where:  { id: pedidoId },
