@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { playClick } from "@/lib/sounds";
 import { Suspense } from "react";
+import ModalAberturaCaixa from "@/components/totem/ModalAberturaCaixa";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
@@ -28,10 +29,44 @@ function IdentificacaoConteudo() {
   const [reconhecido, setReconhecido] = useState(false);
   const nomeRef = useRef<HTMLInputElement>(null);
   const ultimoBuscadoRef = useRef("");
+  // Caixa do dia: "verificando" → "aberto" | "fechado"
+  const [caixa, setCaixa]             = useState<"verificando" | "aberto" | "fechado">("verificando");
+  const [modalCaixa, setModalCaixa]   = useState(false);
 
   useEffect(function() {
     nomeRef.current?.focus();
   }, []);
+
+  // Verifica se há caixa aberto. Sem caixa, oferece a abertura UMA vez por sessão
+  // do browser (sessionStorage 'caixa_verificado'); ignorado, só mostra o aviso.
+  // Acesso via QR de mesa (celular do cliente) não verifica caixa.
+  useEffect(function() {
+    if (mesaId) return;
+    fetch("/api/caixa/status?empresaId=" + EMPRESA_ID)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok && d.data.aberto) { setCaixa("aberto"); return; }
+        setCaixa("fechado");
+        var jaVerificado = false;
+        try { jaVerificado = sessionStorage.getItem("caixa_verificado") === "1"; } catch(e) {}
+        if (!jaVerificado) {
+          try { sessionStorage.setItem("caixa_verificado", "1"); } catch(e) {}
+          setModalCaixa(true);
+        }
+      })
+      .catch(function() {});
+  }, [mesaId]);
+
+  function caixaAberto() {
+    setModalCaixa(false);
+    setCaixa("aberto");
+    nomeRef.current?.focus();
+  }
+
+  function fecharModalCaixa() {
+    setModalCaixa(false);
+    nomeRef.current?.focus();
+  }
 
   useEffect(function() {
     var nums = wpp.replace(/\D/g, "");
@@ -115,11 +150,19 @@ function IdentificacaoConteudo() {
       className="h-screen w-screen flex flex-col select-none"
       style={{ background: "#F6F0E5" }}
     >
+      {modalCaixa && <ModalAberturaCaixa onAberto={caixaAberto} onFechar={fecharModalCaixa} />}
+
+      {/* Aviso discreto: caixa não aberto (modal ignorado) */}
+      {caixa === "fechado" && !modalCaixa && (
+        <div className="w-full bg-amber-100 text-amber-800 text-sm font-medium text-center py-2 px-4">
+          ⚠️ Caixa não aberto — pedidos não vinculados ao caixa
+        </div>
+      )}
+
       {/* Botão voltar */}
       <button
         onClick={function() { router.push("/"); }}
-        className="absolute top-4 left-4 flex items-center gap-1.5 text-[#3B2415] touch-manipulation
-                   active:scale-95 transition-transform p-2"
+        className={(caixa === "fechado" && !modalCaixa ? "top-11" : "top-4") + " absolute left-4 flex items-center gap-1.5 text-[#3B2415] touch-manipulation active:scale-95 transition-transform p-2"}
         title="Voltar"
       >
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">

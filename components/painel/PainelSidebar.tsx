@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -41,6 +42,21 @@ export default function PainelSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const perfil = (session?.user as { perfil?: string } | undefined)?.perfil ?? "";
+  // null = ainda carregando; atualiza ao navegar e a cada minuto (abertura pode vir do totem)
+  const [caixaAberto, setCaixaAberto] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!session?.user || pathname === "/login") return;
+    const verificar = () => {
+      fetch("/api/caixa/status")
+        .then((r) => r.json())
+        .then((d) => { if (d.ok) setCaixaAberto(Boolean(d.data.aberto)); })
+        .catch(() => {});
+    };
+    verificar();
+    const intervalo = setInterval(verificar, 60_000);
+    return () => clearInterval(intervalo);
+  }, [session?.user, pathname]);
 
   if (pathname === "/login") return null;
 
@@ -60,6 +76,19 @@ export default function PainelSidebar() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="Coffee & Beats" className="w-32 object-contain" />
       </div>
+
+      {/* Status do caixa */}
+      {caixaAberto !== null && (
+        <Link
+          href="/caixa"
+          className={`mx-3 mt-3 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 ${
+            caixaAberto ? "bg-green-500/15 text-green-300" : "bg-red-500/15 text-red-300"
+          }`}
+        >
+          <span>{caixaAberto ? "🟢" : "🔴"}</span>
+          {caixaAberto ? "Caixa aberto" : "Caixa fechado"}
+        </Link>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">

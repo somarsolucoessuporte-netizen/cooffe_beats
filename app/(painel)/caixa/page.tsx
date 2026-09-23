@@ -9,6 +9,7 @@ type StatusCaixa = {
     abridoEm: string;
     valorAbertura: number;
     operador: string;
+    origem?: "TOTEM" | "PAINEL";
   } | null;
   resumo: {
     totalPedidos: number;
@@ -190,7 +191,11 @@ ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.
             <p className="font-bold text-cb-marrom text-lg">
               {estaAberto ? "Caixa Aberto" : "Caixa Fechado"}
             </p>
-            {caixa && (
+            {caixa && caixa.origem === "TOTEM" ? (
+              <p className="text-cb-marrom/60 text-sm">
+                Caixa aberto às {fmt(caixa.abridoEm)} pelo totem · Troco inicial: {R$(caixa.valorAbertura)}
+              </p>
+            ) : caixa && (
               <p className="text-cb-marrom/60 text-sm">
                 Operador: {caixa.operador} · Aberto às {fmt(caixa.abridoEm)} · Troco inicial: {R$(caixa.valorAbertura)}
               </p>

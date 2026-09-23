@@ -34,13 +34,24 @@ export async function GET(req: NextRequest) {
   const totalDinheiro = caixa.pedidos.filter(p => p.pagamento?.metodo === "DINHEIRO").reduce((acc, p) => acc + Number(p.total), 0);
   const ticketMedio   = caixa.pedidos.length > 0 ? totalVendas / caixa.pedidos.length : 0;
 
+  // Abertura pelo painel nunca grava operadorNome; pelo totem, sempre grava
+  const origem = caixa.operadorNome ? "TOTEM" : "PAINEL";
+
+  const inicioDoDia = new Date();
+  inicioDoDia.setHours(0, 0, 0, 0);
+
   return resposta({
-    aberto: true,
+    aberto:        true,
+    abertoHoje:    caixa.abridoEm >= inicioDoDia,
+    caixaId:       caixa.id,
+    abertura:      caixa.abridoEm,
+    valorAbertura: Number(caixa.valorAbertura),
     caixa: {
       id:            caixa.id,
       abridoEm:      caixa.abridoEm,
       valorAbertura: Number(caixa.valorAbertura),
       operador:      caixa.usuario?.nome ?? caixa.operadorNome ?? "—",
+      origem,
     },
     resumo: {
       totalPedidos: caixa.pedidos.length,

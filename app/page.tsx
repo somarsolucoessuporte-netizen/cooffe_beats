@@ -10,8 +10,6 @@ const MUSICAS = [
   "/the_mountain-relaxed-house-159130.mp3",
 ];
 
-const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
-
 const PARTICLES = [
   { top: "12%", left: "8%",  size: 6, dur: "9s",   delay: "0s" },
   { top: "25%", left: "88%", size: 4, dur: "7s",   delay: "1.2s" },
@@ -51,16 +49,6 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(function() {
-    fetch("/api/caixa/status?empresaId=" + EMPRESA_ID)
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok || !d.data.aberto) {
-          router.replace("/abertura");
-        }
-      })
-      .catch(function() {});
-  }, [router]);
 
   useEffect(function() {
     setHora(new Date().toLocaleTimeString("pt-BR"));
