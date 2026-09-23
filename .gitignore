@@ -51,3 +51,6 @@ capacitor-app/
 
 .vercel
 .env*
+
+# backups locais de dados (contém dados de clientes)
+/backups/
