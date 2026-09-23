@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { liberarPedidoPago } from "@/lib/liberar-pedido";
 
 const SimularPagamentoSchema = z.object({
   pedidoId: z.string(),
@@ -35,13 +36,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      await tx.pedido.update({
-        where: { id: pedidoId },
-        data: { status: "RECEBIDO" },
-      });
-
       return pag;
     });
+
+    await liberarPedidoPago(pedidoId);
 
     return resposta(pagamento, 201);
   } catch (err) {

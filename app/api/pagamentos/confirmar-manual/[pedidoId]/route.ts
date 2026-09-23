@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { liberarPedidoPago } from "@/lib/liberar-pedido";
+
+const Schema = z.object({
+  pin:    z.string(),
+  metodo: z.enum(["PIX", "CARTAO"]),
+});
+
+// PIN do atendente — padrão 1234 até existir tela de configuração
+const PIN_CONFIRMACAO = process.env.PIN_CONFIRMACAO_MANUAL ?? "1234";
 
 /**
  * POST /api/pagamentos/confirmar-manual/[pedidoId]
- * Fallback manual para quando o webhook do SumUp não chega a tempo no totem:
- * o operador confirma visualmente que a maquininha aprovou e o totem avança
- * como se o webhook tivesse chegado. Protegida contra dupla confirmação —
- * só altera o pagamento se ele ainda estiver PENDENTE.
+ * Fallback manual enquanto a maquininha SumUp não recebe a cobrança pela API:
+ * o cliente paga direto na maquininha e o atendente confirma com PIN no totem.
+ * O pedido sai de AGUARDANDO_PAGAMENTO para RECEBIDO (entra no KDS) e o pagamento
+ * fica APROVADO com `confirmadoManualmente`. Se o webhook já aprovou, não altera nada.
  */
 export async function POST(
   req: NextRequest,
@@ -15,40 +25,62 @@ export async function POST(
   const { pedidoId } = await params;
 
   try {
-    const pagamento = await prisma.pagamento.findUnique({
-      where:  { pedidoId },
-      select: { status: true },
-    });
+    const validacao = Schema.safeParse(await req.json().catch(() => null));
+    if (!validacao.success) {
+      return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 });
+    }
+    const { pin, metodo } = validacao.data;
 
-    if (!pagamento) {
-      return NextResponse.json({ ok: false, error: "Pedido ou pagamento não encontrado" }, { status: 404 });
+    if (pin !== PIN_CONFIRMACAO) {
+      return NextResponse.json({ ok: false, error: "PIN incorreto" }, { status: 401 });
     }
 
-    if (pagamento.status === "APROVADO") {
+    const pedido = await prisma.pedido.findUnique({
+      where:  { id: pedidoId },
+      select: { status: true, total: true, pagamento: { select: { status: true } } },
+    });
+
+    if (!pedido) {
+      return NextResponse.json({ ok: false, error: "Pedido não encontrado" }, { status: 404 });
+    }
+
+    if (pedido.pagamento?.status === "APROVADO") {
       return NextResponse.json({ ok: true, jaAprovado: true });
     }
 
-    if (pagamento.status !== "PENDENTE") {
+    if (pedido.status === "CANCELADO" || (pedido.pagamento && pedido.pagamento.status !== "PENDENTE")) {
       return NextResponse.json(
-        { ok: false, error: `Pagamento não pode ser confirmado (status: ${pagamento.status})` },
+        { ok: false, error: "Pagamento não pode ser confirmado (pedido cancelado ou pagamento recusado)" },
         { status: 409 },
       );
     }
 
-    await prisma.$transaction([
-      prisma.pagamento.update({
-        where: { pedidoId },
-        data:  {
-          status: "APROVADO",
-          paidAt: new Date(),
-          confirmadoManualmente: true,
+    const dadosAprovacao = {
+      status: "APROVADO" as const,
+      paidAt: new Date(),
+      confirmadoManualmente: true,
+    };
+
+    if (pedido.pagamento) {
+      // Condicional em PENDENTE: se o webhook aprovar no meio, não sobrescreve
+      await prisma.pagamento.updateMany({
+        where: { pedidoId, status: "PENDENTE" },
+        data:  dadosAprovacao,
+      });
+    } else {
+      // Cobrança SumUp não chegou a ser criada — registra o pagamento aqui
+      await prisma.pagamento.create({
+        data: {
+          pedidoId,
+          metodo:     metodo === "PIX" ? "PIX" : "CARTAO_CREDITO",
+          valor:      pedido.total,
+          referencia: `MAN-${Date.now()}`,
+          ...dadosAprovacao,
         },
-      }),
-      prisma.pedido.update({
-        where: { id: pedidoId },
-        data:  { pago: true },
-      }),
-    ]);
+      });
+    }
+
+    await liberarPedidoPago(pedidoId);
 
     return NextResponse.json({ ok: true, jaAprovado: false });
   } catch (err) {

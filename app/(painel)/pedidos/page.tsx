@@ -22,6 +22,7 @@ interface Pedido {
   previsaoChegada: string | null;
   pago: boolean;
   itens: ItemPedido[];
+  pagamento?: { metodo: string; status: string; confirmadoManualmente?: boolean } | null;
 }
 
 type StatusColuna = "RECEBIDO" | "EM_PREPARO" | "PRONTO" | "ENTREGUE";
@@ -109,7 +110,8 @@ export default function Pedidos() {
     const channel = supabase
       .channel(`empresa-${empresaId}`)
       .on("broadcast", { event: "pedido:novo" }, ({ payload }) => {
-        setPedidos((prev) => [payload as Pedido, ...prev]);
+        const novo = payload as Pedido;
+        setPedidos((prev) => (prev.some((p) => p.id === novo.id) ? prev.map((p) => (p.id === novo.id ? novo : p)) : [novo, ...prev]));
       })
       .on("broadcast", { event: "pedido:atualizado" }, ({ payload }) => {
         const { id, status } = payload as { id: string; status: string };
@@ -299,6 +301,13 @@ export default function Pedidos() {
                             ✓ Pago
                           </span>
                         )}
+                      </div>
+                    )}
+                    {pedido.pagamento?.confirmadoManualmente && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                        💳 Confirmado manualmente
+                      </span>
                       </div>
                     )}
                     {/* Previsão de chegada */}

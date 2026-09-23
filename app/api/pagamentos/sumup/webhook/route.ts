@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verificarCheckout } from "@/lib/sumup";
+import { liberarPedidoPago } from "@/lib/liberar-pedido";
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,18 +43,14 @@ export async function POST(req: NextRequest) {
       if (result.count === 0) {
         console.warn("[Webhook SumUp] Pagamento não encontrado para referencia:", referencia);
       } else {
-        // StatusPedido não tem valor "PAGO" — o pedido do totem já nasce RECEBIDO
-        // (app/api/pedidos/route.ts) para o KDS pegar via Realtime independente do
-        // pagamento; a confirmação financeira usa o campo booleano `pago`.
+        // Pedido PIX/cartão do totem nasce AGUARDANDO_PAGAMENTO; aprovado, vai
+        // para RECEBIDO e entra no KDS. A confirmação financeira usa `pago`.
         const pagamento = await prisma.pagamento.findFirst({
           where:  { referencia },
           select: { pedidoId: true },
         });
         if (pagamento?.pedidoId) {
-          await prisma.pedido.update({
-            where: { id: pagamento.pedidoId },
-            data:  { pago: true },
-          });
+          await liberarPedidoPago(pagamento.pedidoId);
         }
       }
     }

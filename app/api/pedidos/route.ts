@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
-import { supabaseAdmin } from "@/lib/supabase";
-import { notificarWhatsApp } from "@/lib/notificar-whatsapp";
+import { efeitosPedidoNaFila } from "@/lib/liberar-pedido";
 
 const ItemSchema = z.object({
   produtoId: z.string(),
@@ -26,7 +25,7 @@ const CriarPedidoSchema = z.object({
   observacao:    z.string().optional(),
   clienteId:     z.string().optional(),
   mesaId:        z.string().optional(),
-  status:        z.enum(["RECEBIDO", "COMANDA_ABERTA"]).optional(),
+  status:        z.enum(["RECEBIDO", "COMANDA_ABERTA", "AGUARDANDO_PAGAMENTO"]).optional(),
   cupomId:       z.string().optional(),
   valorDesconto: z.number().optional(),
   canalVendaId:  z.string().optional(),
@@ -127,44 +126,11 @@ export async function POST(req: NextRequest) {
       return novoPedido;
     });
 
-    // Atualiza estatísticas do cliente em background (fire-and-forget)
-    if (clienteId) {
-      prisma.cliente.update({
-        where: { id: clienteId },
-        data: { totalGasto: { increment: Number(pedido.total) } },
-      }).catch(() => {});
-
-      // Notificação WhatsApp de confirmação
-      prisma.cliente.findUnique({ where: { id: clienteId }, select: { nome: true, whatsapp: true } })
-        .then(function(cliente) {
-          if (!cliente?.whatsapp) return;
-          notificarWhatsApp({
-            whatsapp: cliente.whatsapp,
-            tipo: "PEDIDO_CONFIRMADO",
-            cliente: { nome: cliente.nome },
-            pedido: {
-              senha: pedido.senha,
-              itens: pedido.itens.map(function(i) { return { nome: i.produto.nome, quantidade: i.quantidade }; }),
-              total: Number(pedido.total),
-            },
-          });
-        })
-        .catch(function() {});
+    // Pedido PIX/cartão do totem nasce AGUARDANDO_PAGAMENTO e só entra na fila
+    // (KDS, estoque, WhatsApp) quando o pagamento é aprovado — ver lib/liberar-pedido.ts
+    if (pedido.status !== "AGUARDANDO_PAGAMENTO") {
+      await efeitosPedidoNaFila(pedido.id);
     }
-
-    await supabaseAdmin.channel(`empresa-${empresaId}`).send({
-      type: "broadcast",
-      event: "pedido:novo",
-      payload: pedido,
-    });
-
-    // Baixa automática de estoque — fire-and-forget, não bloqueia a resposta
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-    fetch(`${baseUrl}/api/admin/estoque/baixa-automatica`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ pedidoId: pedido.id }),
-    }).catch(function () {}); // ignora erros silenciosamente
 
     return resposta(pedido, 201);
   } catch (err) {

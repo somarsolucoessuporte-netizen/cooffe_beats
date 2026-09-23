@@ -7,6 +7,7 @@ import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
 import { iniciarPagamentoNFC } from "@/lib/sunmi";
+import { printCupom } from "@/lib/sunmi-print";
 
 type Tela = "escolha" | "pix" | "cartao" | "maquininha";
 
@@ -16,7 +17,6 @@ const TIMEOUT_PIX_MS        = 10 * 60 * 1000; // 10 minutos
 const TIMEOUT_MAQUININHA_MS =  5 * 60 * 1000; // 5 minutos
 const POLL_STATUS_MS        = 3000;
 const POLL_CARTAO_MS        = 2000;
-const CONFIRMACAO_MANUAL_MS = 30 * 1000; // exibe botão de confirmação manual após 30s
 
 // QR Code visual para modo demo
 function QRFakeDemo() {
@@ -59,6 +59,107 @@ function QRFakeDemo() {
   );
 }
 
+// Teclado numérico de PIN do atendente — envia ao completar 4 dígitos
+function TecladoPin({ onConfirmar, onFechar }: {
+  onConfirmar: (pin: string) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const [pin, setPin]           = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [erroPin, setErroPin]   = useState<string | null>(null);
+
+  async function digitar(d: string) {
+    if (enviando || pin.length >= 4) return;
+    playClick();
+    setErroPin(null);
+    var novo = pin + d;
+    setPin(novo);
+    if (novo.length < 4) return;
+
+    setEnviando(true);
+    try {
+      await onConfirmar(novo);
+    } catch(err) {
+      setErroPin(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
+      setPin("");
+      setEnviando(false);
+    }
+  }
+
+  function apagar() {
+    if (enviando) return;
+    playClick();
+    setPin(function(p) { return p.slice(0, -1); });
+  }
+
+  var teclas = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6" onClick={onFechar}>
+      <div
+        className="bg-white rounded-3xl p-8 w-full max-w-sm flex flex-col items-center gap-5 shadow-xl"
+        onClick={function(e) { e.stopPropagation(); }}
+      >
+        <p className="font-extrabold text-cb-marrom text-xl text-center">Confirmar pagamento recebido</p>
+        <p className="text-cb-marrom/60 text-sm text-center -mt-3">Digite o PIN do atendente</p>
+
+        <div className="flex gap-4">
+          {[0, 1, 2, 3].map(function(i) {
+            return (
+              <span
+                key={i}
+                className={"w-4 h-4 rounded-full border-2 border-cb-marrom " + (i < pin.length ? "bg-cb-marrom" : "")}
+              />
+            );
+          })}
+        </div>
+
+        <p className={"text-sm h-5 " + (erroPin ? "text-red-600" : "text-cb-marrom/60")}>
+          {enviando ? "Confirmando..." : erroPin ?? ""}
+        </p>
+
+        <div className="grid grid-cols-3 gap-3 w-full">
+          {teclas.map(function(d) {
+            return (
+              <button
+                key={d}
+                onClick={function() { digitar(d); }}
+                disabled={enviando}
+                className="h-16 rounded-2xl bg-cb-bege text-cb-marrom font-extrabold text-2xl
+                           touch-manipulation active:scale-95 disabled:opacity-60"
+              >
+                {d}
+              </button>
+            );
+          })}
+          <button
+            onClick={onFechar}
+            disabled={enviando}
+            className="h-16 rounded-2xl text-cb-marrom/70 font-bold text-sm touch-manipulation disabled:opacity-60"
+          >
+            Fechar
+          </button>
+          <button
+            onClick={function() { digitar("0"); }}
+            disabled={enviando}
+            className="h-16 rounded-2xl bg-cb-bege text-cb-marrom font-extrabold text-2xl
+                       touch-manipulation active:scale-95 disabled:opacity-60"
+          >
+            0
+          </button>
+          <button
+            onClick={apagar}
+            disabled={enviando}
+            className="h-16 rounded-2xl text-cb-marrom font-bold text-2xl touch-manipulation disabled:opacity-60"
+          >
+            ⌫
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatarTempo(seg: number): string {
   var m = Math.floor(seg / 60);
   var s = seg % 60;
@@ -76,14 +177,15 @@ export default function Pagamento() {
   const [erro, setErro]                 = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl]   = useState<string | null>(null);
   const [tempoRestante, setTempoRestante] = useState(600);
-  const [mostrarConfirmacaoManual, setMostrarConfirmacaoManual] = useState(false);
-  const [confirmandoManual, setConfirmandoManual] = useState(false);
+  // Cobrança SumUp não pôde ser criada: cliente paga direto na maquininha
+  const [semCobranca, setSemCobranca]   = useState(false);
+  const [pinAberto, setPinAberto]       = useState(false);
+  const [cancelando, setCancelando]     = useState(false);
 
   const pedidoRef   = useRef<{ id: string; senha: string } | null>(null);
   const pollingRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const manualRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalRef    = useRef(totalValor);
   totalRef.current  = totalValor;
   const metodoRef   = useRef<"PIX" | "CARTAO" | "DINHEIRO">("PIX");
@@ -95,7 +197,6 @@ export default function Pagamento() {
       if (pollingRef.current) clearInterval(pollingRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (timerRef.current)   clearInterval(timerRef.current);
-      if (manualRef.current)  clearTimeout(manualRef.current);
     };
   }, []);
 
@@ -103,14 +204,12 @@ export default function Pagamento() {
     if (pollingRef.current) clearInterval(pollingRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (timerRef.current)   clearInterval(timerRef.current);
-    if (manualRef.current)  clearTimeout(manualRef.current);
   }
 
   function pararPolling() {
     if (pollingRef.current) clearInterval(pollingRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (timerRef.current)   clearInterval(timerRef.current);
-    if (manualRef.current)  clearTimeout(manualRef.current);
   }
 
   // Regressiva exibida na tela; duracao em segundos
@@ -124,9 +223,48 @@ export default function Pagamento() {
     }, 1000);
   }
 
-  async function confirmarPagamento(metodo: string) {
+  // Pagamento aprovado (webhook, PIN do atendente ou simulação): imprime
+  // comprovante + comanda e segue para a confirmação com a senha
+  function finalizar(metodo: string) {
     if (!pedidoRef.current) return;
     var { id, senha } = pedidoRef.current;
+    var nomeCliente: string | undefined;
+    try { nomeCliente = sessionStorage.getItem("clienteNome") ?? undefined; } catch(e) {}
+
+    var itensCupom = itens.map(function(item) {
+      var adds = item.adicionais.map(function(a) { return a.nome; });
+      return {
+        nome:       adds.length > 0 ? item.nome + " + " + adds.join(", ") : item.nome,
+        quantidade: item.quantidade,
+        preco:      item.preco + item.adicionais.reduce(function(s, a) { return s + a.preco; }, 0),
+        observacao: item.observacao ?? undefined,
+      };
+    });
+    var base = { numeroPedido: senha, itens: itensCupom, total: totalRef.current, nomeCliente, metodoPagamento: metodo };
+    printCupom({ ...base, via: "CLIENTE" }).catch(function() {});
+    printCupom({ ...base, via: "COZINHA" }).catch(function() {});
+
+    limparCarrinho();
+    router.push("/confirmacao?senha=" + encodeURIComponent(senha) + "&id=" + id);
+  }
+
+  // Pedido PIX/cartão que não foi pago (desistência, expiração, recusa) — sai de
+  // AGUARDANDO_PAGAMENTO para CANCELADO. Retorna true se o pagamento já tinha sido aprovado.
+  async function cancelarPedidoPendente(): Promise<boolean> {
+    if (!pedidoRef.current) return false;
+    var id = pedidoRef.current.id;
+    try {
+      var res   = await fetch("/api/pagamentos/cancelar/" + id, { method: "POST" });
+      var dados = await res.json();
+      return dados.jaAprovado === true;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  async function confirmarPagamento(metodo: string) {
+    if (!pedidoRef.current) return;
+    var id = pedidoRef.current.id;
     try {
       await fetch("/api/pagamentos/simular", {
         method:  "POST",
@@ -134,8 +272,7 @@ export default function Pagamento() {
         body:    JSON.stringify({ pedidoId: id, valor: totalRef.current, metodo }),
       });
     } catch(e) { /* silencioso */ }
-    limparCarrinho();
-    router.push("/confirmacao?senha=" + encodeURIComponent(senha) + "&id=" + id);
+    finalizar(metodo);
   }
 
   async function simularAprovacao(metodo: string) {
@@ -152,21 +289,20 @@ export default function Pagamento() {
    */
   function iniciarPolling(pedidoId: string, maquininha = false) {
     pararPolling();
-    setMostrarConfirmacaoManual(false);
-    setConfirmandoManual(false);
 
     var duracaoSeg = maquininha ? 300 : 600;
     iniciarTimer(duracaoSeg);
 
     timeoutRef.current = setTimeout(function() {
       pararPolling();
-      setErro("Tempo de pagamento expirado. Tente novamente.");
-      setTela("escolha");
+      setPinAberto(false);
+      cancelarPedidoPendente().then(function(jaAprovado) {
+        if (jaAprovado) { finalizar(metodoRef.current); return; }
+        pedidoRef.current = null;
+        setErro("Tempo de pagamento expirado. Tente novamente.");
+        setTela("escolha");
+      });
     }, maquininha ? TIMEOUT_MAQUININHA_MS : TIMEOUT_PIX_MS);
-
-    manualRef.current = setTimeout(function() {
-      setMostrarConfirmacaoManual(true);
-    }, CONFIRMACAO_MANUAL_MS);
 
     var pollMs = maquininha ? POLL_CARTAO_MS : (metodoRef.current === "CARTAO" ? POLL_CARTAO_MS : POLL_STATUS_MS);
 
@@ -177,19 +313,17 @@ export default function Pagamento() {
 
         if (statusData.status === "APROVADO") {
           pararPolling();
-          if (pedidoRef.current) {
-            limparCarrinho();
-            router.push(
-              "/confirmacao?senha=" + encodeURIComponent(pedidoRef.current.senha) +
-              "&id=" + pedidoRef.current.id
-            );
-          }
+          setPinAberto(false);
+          finalizar(metodoRef.current);
         } else if (
           statusData.status === "RECUSADO" ||
           statusData.status === "CANCELADO" ||
           statusData.status === "ESTORNADO"
         ) {
           pararPolling();
+          setPinAberto(false);
+          cancelarPedidoPendente();
+          pedidoRef.current = null;
           setErro("Pagamento recusado ou expirado. Tente novamente.");
           setTela("escolha");
         }
@@ -197,33 +331,24 @@ export default function Pagamento() {
     }, pollMs);
   }
 
-  // Fallback manual: operador confirma que a maquininha aprovou quando o
-  // webhook do SumUp não chega a tempo. Totem avança como no fluxo automático.
-  async function confirmarManualmente() {
-    if (!pedidoRef.current || confirmandoManual) return;
-    playClick();
-    setConfirmandoManual(true);
-    setErro(null);
-    try {
-      var res   = await fetch("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, { method: "POST" });
-      var dados = await res.json();
-      if (!dados.ok) throw new Error(dados.error ?? "Erro ao confirmar pagamento");
+  // Fallback manual: cliente pagou direto na maquininha e o atendente confirma
+  // com PIN. Lança erro com a mensagem da API (ex.: "PIN incorreto") para o teclado.
+  async function confirmarManualmente(pin: string) {
+    if (!pedidoRef.current) return;
+    var res   = await fetch("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ pin, metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO" }),
+    });
+    var dados = await res.json();
+    if (!dados.ok) throw new Error(dados.error ?? "Erro ao confirmar pagamento");
 
-      pararPolling();
-      if (pedidoRef.current) {
-        limparCarrinho();
-        router.push(
-          "/confirmacao?senha=" + encodeURIComponent(pedidoRef.current.senha) +
-          "&id=" + pedidoRef.current.id
-        );
-      }
-    } catch(err) {
-      setErro(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
-      setConfirmandoManual(false);
-    }
+    pararPolling();
+    setPinAberto(false);
+    finalizar(metodoRef.current);
   }
 
-  const criarPedido = useCallback(async function() {
+  const criarPedido = useCallback(async function(status?: "AGUARDANDO_PAGAMENTO") {
     var clienteId: string | null = null;
     var mesaId:    string | null = null;
     try {
@@ -236,6 +361,7 @@ export default function Pagamento() {
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
         empresaId,
+        status,
         clienteId: clienteId ?? undefined,
         mesaId:    mesaId    ?? undefined,
         itens: itens.map(function(item) {
@@ -263,10 +389,20 @@ export default function Pagamento() {
     setErro(null);
     metodoRef.current = metodo;
 
-    try {
-      var pedido = await criarPedido();
-      pedidoRef.current = pedido;
+    setSemCobranca(false);
 
+    var pedido: { id: string; senha: string };
+    try {
+      // Só entra no KDS quando o pagamento for aprovado (webhook ou PIN do atendente)
+      pedido = await criarPedido("AGUARDANDO_PAGAMENTO");
+      pedidoRef.current = pedido;
+    } catch(err) {
+      setErro(err instanceof Error ? err.message : "Erro ao criar pedido");
+      setCarregando(false);
+      return;
+    }
+
+    try {
       if (DEMO) {
         setTela(metodo === "PIX" ? "pix" : "cartao");
         setCarregando(false);
@@ -301,8 +437,14 @@ export default function Pagamento() {
         iniciarPolling(pedido.id, false);
       }
     } catch(err) {
-      setErro(err instanceof Error ? err.message : "Erro ao iniciar pagamento");
+      // Sem cobrança na SumUp (ex.: scope payments ainda não liberado): o cliente
+      // paga direto na maquininha e o atendente confirma com PIN. Polling segue
+      // ativo caso o pagamento seja aprovado por outro caminho.
+      console.warn("[Pagamento] Cobrança SumUp não criada:", err instanceof Error ? err.message : err);
+      setSemCobranca(true);
+      setTela(metodo === "PIX" ? "pix" : "cartao");
       setCarregando(false);
+      iniciarPolling(pedido.id, false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregando, itens, totalValor, criarPedido]);
@@ -337,40 +479,58 @@ export default function Pagamento() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregandoDinheiro, itens, totalValor, criarPedido]);
 
-  function voltarEscolha() {
+  // "Cancelar pagamento": cancela o pedido pendente e volta para a escolha do método
+  async function voltarEscolha() {
+    if (cancelando) return;
+    playClick();
+    setCancelando(true);
     pararTudo();
+    setPinAberto(false);
+
+    var jaAprovado = await cancelarPedidoPendente();
+    if (jaAprovado) { finalizar(metodoRef.current); return; }
+
+    pedidoRef.current   = null;
     readerIdRef.current = null;
     setTela("escolha");
     setCheckoutUrl(null);
+    setSemCobranca(false);
     setErro(null);
     setSimulando(false);
     setTempoRestante(600);
-    setMostrarConfirmacaoManual(false);
-    setConfirmandoManual(false);
+    setCancelando(false);
   }
 
-  // Botão de fallback exibido 30s após o início do polling real (não aparece em DEMO,
-  // que já tem botões de simulação próprios).
-  function ConfirmacaoManual() {
-    if (DEMO || !mostrarConfirmacaoManual) return null;
+  // Rodapé comum às telas de aguardo: cancelar (esquerda) + confirmação manual
+  // do atendente (canto inferior direito, discreta, protegida por PIN)
+  // Chamado como função (não <Componente />) para o TecladoPin não remontar a cada tick do timer
+  function acoesAguardo() {
     return (
-      <div className="flex flex-col items-center gap-3">
-        <p className="text-cb-marrom/60 text-sm text-center max-w-xs">
-          Pagamento aprovado na maquineta? Toque para confirmar.
-        </p>
+      <>
         <button
-          onClick={confirmarManualmente}
-          disabled={confirmandoManual}
-          className="flex items-center gap-3 bg-green-50 border-2 border-green-500 text-green-700
-                     font-extrabold text-lg py-4 px-8 rounded-2xl touch-manipulation btn-totem
-                     disabled:opacity-60 hover:bg-green-100 transition-colors"
+          onClick={voltarEscolha}
+          disabled={cancelando}
+          className="border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-8
+                     rounded-2xl touch-manipulation btn-totem disabled:opacity-60"
         >
-          {confirmandoManual && (
-            <span className="w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-          )}
-          {confirmandoManual ? "Confirmando..." : "Confirmar pagamento ✓"}
+          {cancelando ? "Cancelando..." : "Cancelar pagamento"}
         </button>
-      </div>
+
+        <button
+          onClick={function() { playClick(); setPinAberto(true); }}
+          className="fixed bottom-5 right-5 z-40 bg-cb-confirma text-white text-sm font-semibold
+                     py-2.5 px-4 rounded-xl shadow-md touch-manipulation opacity-90 active:scale-95"
+        >
+          ✓ Confirmar pagamento recebido
+        </button>
+
+        {pinAberto && (
+          <TecladoPin
+            onConfirmar={confirmarManualmente}
+            onFechar={function() { setPinAberto(false); }}
+          />
+        )}
+      </>
     );
   }
 
@@ -422,14 +582,7 @@ export default function Pagamento() {
             </div>
           )}
 
-          <ConfirmacaoManual />
-
-          <button
-            onClick={voltarEscolha}
-            className="text-cb-marrom/50 text-sm underline underline-offset-4"
-          >
-            ← Cancelar e escolher outra forma
-          </button>
+          {acoesAguardo()}
         </div>
       </div>
     );
@@ -486,6 +639,17 @@ export default function Pagamento() {
                   <span>Verificando pagamento...</span>
                 </div>
               </>
+            ) : semCobranca ? (
+              <>
+                <span className="text-8xl">📱</span>
+                <p className="font-extrabold text-cb-marrom text-2xl text-center">
+                  Pague com PIX na maquininha
+                </p>
+                <div className="flex items-center gap-2 text-green-600 text-sm animate-pulse">
+                  <span className="text-lg">⟳</span>
+                  <span>Aguardando confirmação de pagamento...</span>
+                </div>
+              </>
             ) : (
               <div className="w-48 h-48 bg-cb-marrom/10 rounded-xl flex items-center justify-center">
                 <span className="text-cb-marrom/40 text-sm animate-pulse">Gerando QR Code...</span>
@@ -499,14 +663,7 @@ export default function Pagamento() {
             </div>
           )}
 
-          <ConfirmacaoManual />
-
-          <button
-            onClick={voltarEscolha}
-            className="text-cb-marrom/50 text-sm underline underline-offset-4"
-          >
-            ← Escolher outra forma de pagamento
-          </button>
+          {acoesAguardo()}
         </div>
       </div>
     );
@@ -566,14 +723,7 @@ export default function Pagamento() {
             </div>
           )}
 
-          <ConfirmacaoManual />
-
-          <button
-            onClick={voltarEscolha}
-            className="text-cb-marrom/50 text-sm underline underline-offset-4"
-          >
-            ← Escolher outra forma de pagamento
-          </button>
+          {acoesAguardo()}
         </div>
       </div>
     );
