@@ -6,6 +6,8 @@ import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
 import { playClick } from "@/lib/sounds";
+import { useTotemMobile } from "@/contexts/TotemModoContext";
+import { SheetAdicionais } from "@/components/web/MobileCardapio";
 
 interface Adicional {
   id: string;
@@ -27,6 +29,7 @@ export default function DetalheProduto() {
   const router = useRouter();
   const params = useParams();
   const { adicionarItem } = useCarrinho();
+  const mobile = useTotemMobile();
 
   const [produto, setProduto] = useState<ProdutoDetalhe | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -77,6 +80,54 @@ export default function DetalheProduto() {
     });
     router.push("/cardapio");
   }, [produto, quantidade, observacao, adicionaisSelecionados, adicionarItem, router]);
+
+  // Celular: produto em bottom sheet sobre fundo marrom (fecha voltando ao cardápio)
+  if (mobile) {
+    return (
+      <div className="h-full bg-[#3B2415]">
+        {produto && (
+          <SheetAdicionais
+            mostrarObservacao
+            produto={{
+              id:          produto.id,
+              nome:        produto.nome,
+              descricao:   produto.descricao,
+              preco:       parseFloat(produto.preco),
+              fotoUrl:     produto.fotoUrl,
+              categoriaId: "",
+              adicionais:  produto.adicionais.map(function ({ adicional }) {
+                return { id: adicional.id, nome: adicional.nome, preco: parseFloat(adicional.preco) };
+              }),
+            }}
+            onFechar={function () { router.push("/cardapio"); }}
+            onAdicionar={function (adicionais, qtd, obs) {
+              playClick();
+              adicionarItem({
+                produtoId:  produto.id,
+                nome:       produto.nome,
+                preco:      parseFloat(produto.preco),
+                quantidade: qtd,
+                observacao: obs,
+                fotoUrl:    produto.fotoUrl,
+                adicionais: adicionais.map(function (a) {
+                  return { adicionalId: a.id, nome: a.nome, preco: a.preco };
+                }),
+              });
+              router.push("/cardapio");
+            }}
+          />
+        )}
+        {!carregando && !produto && (
+          <div className="h-full flex flex-col items-center justify-center gap-4 text-cb-bege">
+            <p className="text-lg">Produto não encontrado</p>
+            <button onClick={function () { router.push("/cardapio"); }} className="h-12 px-8 rounded-xl bg-cb-bege text-[#3B2415] font-bold">
+              Voltar ao cardápio
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (carregando) {
     return (

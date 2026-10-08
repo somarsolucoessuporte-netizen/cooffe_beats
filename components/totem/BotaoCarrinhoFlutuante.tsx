@@ -4,6 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
 import { playClick } from "@/lib/sounds";
+import { useTotemMobile } from "@/contexts/TotemModoContext";
 
 const ROTAS_OCULTAS = ["/carrinho", "/pagamento", "/confirmacao", "/mesa"];
 
@@ -11,7 +12,10 @@ export default function BotaoCarrinhoFlutuante() {
   const { totalItens, totalValor } = useCarrinho();
   const router   = useRouter();
   const pathname = usePathname();
+  const mobile   = useTotemMobile();
 
+  // No celular o cardápio tem barra de carrinho própria (MobileCardapio)
+  if (mobile) return null;
   if (totalItens === 0) return null;
   if (ROTAS_OCULTAS.some(function(r) { return pathname.startsWith(r); })) return null;
 

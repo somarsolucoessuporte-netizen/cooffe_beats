@@ -7,10 +7,12 @@ import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
 import { printCupom } from "@/lib/sunmi-print";
+import { useTotemMobile } from "@/contexts/TotemModoContext";
 
 export default function Carrinho() {
   const router = useRouter();
   const { itens, totalValor, removerItem, alterarQuantidade, limparCarrinho } = useCarrinho();
+  const mobile = useTotemMobile(); // celular: espaçamentos menores e rodapé com safe-area
   const [confirmandoRemocao, setConfirmandoRemocao] = useState<number | null>(null);
   const [modalComanda, setModalComanda]             = useState(false);
   const [enviando, setEnviando]                     = useState(false);
@@ -168,12 +170,12 @@ export default function Carrinho() {
     <div className="h-full flex flex-col animate-fadeIn">
       <HeaderTotem />
 
-      <div className="flex-1 overflow-y-auto totem-scroll p-6 flex flex-col gap-4">
+      <div className={"flex-1 overflow-y-auto totem-scroll flex flex-col " + (mobile ? "p-4 gap-3" : "p-6 gap-4")}>
         {itens.map(function(item, index) {
           return (
             <div
               key={`${item.produtoId}-${index}`}
-              className="bg-white border border-cb-marrom/10 rounded-2xl p-4 flex gap-4 shadow-sm"
+              className={"bg-white border border-cb-marrom/10 rounded-2xl flex shadow-sm " + (mobile ? "p-3 gap-3" : "p-4 gap-4")}
             >
               {/* Foto mini */}
               <div className="w-20 h-20 rounded-xl bg-cb-bege flex items-center justify-center shrink-0 overflow-hidden">
@@ -187,7 +189,7 @@ export default function Carrinho() {
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="font-sans font-extrabold text-lg text-cb-marrom leading-snug truncate">
+                <p className={"font-sans font-extrabold text-cb-marrom leading-snug truncate " + (mobile ? "text-base" : "text-lg")}>
                   {item.nome}
                 </p>
                 {item.adicionais.length > 0 && (
@@ -267,7 +269,12 @@ export default function Carrinho() {
       </div>
 
       {/* Rodapé */}
-      <div className="shrink-0 bg-white border-t border-cb-marrom/10 p-6 flex flex-col gap-4">
+      <div
+        className={
+          "shrink-0 bg-white border-t border-cb-marrom/10 flex flex-col " +
+          (mobile ? "px-4 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] gap-3 rounded-t-2xl shadow-[0_-4px_16px_rgba(59,36,21,0.08)]" : "p-6 gap-4")
+        }
+      >
         {/* Cupom */}
         {!cupomAtivo ? (
           <div className="flex flex-col gap-1">
@@ -315,20 +322,20 @@ export default function Carrinho() {
             {formatarMoeda(totalComDesconto)}
           </span>
         </div>
-        <div className="flex gap-4">
+        <div className={"flex " + (mobile ? "gap-3" : "gap-4")}>
           <button
             onClick={function() { playClick(); router.push("/cardapio"); }}
-            className="flex-1 border-2 border-cb-marrom text-cb-marrom font-extrabold font-sans text-lg
-                       py-4 rounded-full touch-manipulation btn-totem min-h-[64px]"
+            className={"flex-1 border-2 border-cb-marrom text-cb-marrom font-extrabold font-sans " +
+                       "rounded-full touch-manipulation btn-totem min-h-[64px] " + (mobile ? "text-base py-3" : "text-lg py-4")}
           >
             + Itens
           </button>
           <button
             onClick={irParaPagamento}
-            className="flex-[2] bg-cb-marrom text-cb-bege font-extrabold font-sans text-lg
-                       py-4 rounded-full touch-manipulation btn-totem min-h-[64px]"
+            className={"flex-[2] bg-cb-marrom text-cb-bege font-extrabold font-sans " +
+                       "touch-manipulation btn-totem min-h-[64px] " + (mobile ? "text-base py-3 rounded-2xl" : "text-lg py-4 rounded-full")}
           >
-            Ir para Pagamento
+            {mobile ? "Finalizar pedido" : "Ir para Pagamento"}
           </button>
         </div>
       </div>

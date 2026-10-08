@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { COOKIE_DISPOSITIVO, ehCelular } from "@/lib/dispositivo";
 
 export default function Diagnostico() {
   const [info, setInfo]   = useState<string[]>([]);
@@ -26,6 +27,11 @@ export default function Diagnostico() {
 
     var isSunmi = navigator.userAgent.toLowerCase().includes("sunmi");
     logs.push("É SUNMI: " + (isSunmi ? "✅ SIM" : "❌ NÃO"));
+
+    // Mesma regra do layout do totem (servidor): decide totem x celular
+    var cookieDisp = (document.cookie.match(new RegExp(COOKIE_DISPOSITIVO + "=([^;]+)")) || [])[1];
+    logs.push("Layout do totem: " + (ehCelular(navigator.userAgent, cookieDisp) ? "📱 CELULAR" : "🖥️ TOTEM") +
+              (cookieDisp ? " (forçado: " + cookieDisp + ")" : " (automático)"));
 
     // Verificar window.print
     logs.push("window.print: " + (typeof window.print === "function" ? "✅ disponível" : "❌ ausente"));

@@ -9,7 +9,6 @@ import {
   ArrowLeft, Cake, Check, Coffee, Cookie, Croissant, Egg, GlassWater, Minus, Plus, Salad,
   Sandwich, ShoppingCart, UtensilsCrossed, Wheat, type LucideIcon,
 } from "lucide-react";
-import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
 
 // Cor principal do portal mobile (usada na animação do botão "+")
@@ -37,7 +36,18 @@ export interface ProdutoMobile {
   adicionais: AdicionalMobile[];
 }
 
+// Carrinho usado pelo cardápio mobile — o portal web e o totem têm contextos diferentes,
+// então cada tela passa um adaptador (ver useCarrinhoWebMobile e CardapioTotemMobile)
+export interface CarrinhoMobile {
+  totalItens: number;
+  totalValor: number;
+  adicionar:  (produto: ProdutoMobile, adicionais: AdicionalMobile[], quantidade: number, observacao?: string) => void;
+}
+
 interface Props {
+  carrinho:           CarrinhoMobile;
+  // Se definido, produtos com adicionais abrem esta ação em vez do bottom sheet interno
+  onAbrirProduto?:    (produto: ProdutoMobile) => void;
   categorias:         CategoriaMobile[];
   produtosIniciais:   ProdutoMobile[];
   categoriaInicialId: string;
@@ -45,6 +55,7 @@ interface Props {
   nomeCliente?:       string;
   rotuloMesa?:        string;       // ex.: "Mesa 5"
   carrinhoHref?:      string;       // padrão: /web/carrinho
+  semNavInferior?:    boolean;      // totem: sem bottom nav, a barra do carrinho encosta no rodapé
 }
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
@@ -96,10 +107,10 @@ function mapearProduto(p: ProdutoApi): ProdutoMobile {
 
 // Cardápio mobile (< 768px): categorias em grade → produtos → bottom sheet de adicionais
 export default function MobileCardapio({
-  categorias, produtosIniciais, categoriaInicialId,
-  nomeCliente, rotuloMesa, carrinhoHref = "/web/carrinho",
+  carrinho, onAbrirProduto, categorias, produtosIniciais, categoriaInicialId,
+  nomeCliente, rotuloMesa, carrinhoHref = "/web/carrinho", semNavInferior = false,
 }: Props) {
-  const { adicionarItem, totalItens, totalValor } = useWebCarrinho();
+  const { totalItens, totalValor } = carrinho;
 
   const [nome,           setNome]           = useState("");
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null);
@@ -142,14 +153,12 @@ export default function MobileCardapio({
 
   // Botão "+": com adicionais abre o bottom sheet, sem adicionais adiciona direto
   function tocarMais(produto: ProdutoMobile) {
-    if (produto.adicionais.length > 0) { setProdutoSheet(produto); return; }
-    adicionarItem({
-      produtoId:  produto.id,
-      nome:       produto.nome,
-      preco:      produto.preco,
-      quantidade: 1,
-      fotoUrl:    produto.fotoUrl,
-    });
+    if (produto.adicionais.length > 0) {
+      if (onAbrirProduto) onAbrirProduto(produto);
+      else setProdutoSheet(produto);
+      return;
+    }
+    carrinho.adicionar(produto, [], 1);
     setAdicionado(produto.id);
     setTimeout(function () { setAdicionado(null); }, 1200);
   }
@@ -319,7 +328,10 @@ export default function MobileCardapio({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className="fixed inset-x-0 z-30 px-4 pb-4 bottom-[calc(64px+env(safe-area-inset-bottom))]"
+            className={
+              "fixed inset-x-0 z-30 px-4 pb-4 " +
+              (semNavInferior ? "bottom-[env(safe-area-inset-bottom)]" : "bottom-[calc(64px+env(safe-area-inset-bottom))]")
+            }
           >
             <Link href={carrinhoHref}>
               <motion.div
@@ -347,17 +359,7 @@ export default function MobileCardapio({
             produto={produtoSheet}
             onFechar={function () { setProdutoSheet(null); }}
             onAdicionar={function (adicionaisEscolhidos, quantidade) {
-              const extra = adicionaisEscolhidos.reduce(function (s, a) { return s + a.preco; }, 0);
-              adicionarItem({
-                produtoId:  produtoSheet.id,
-                nome:       produtoSheet.nome,
-                preco:      produtoSheet.preco + extra,
-                quantidade,
-                fotoUrl:    produtoSheet.fotoUrl,
-                adicionais: adicionaisEscolhidos.map(function (a) {
-                  return { adicionalId: a.id, nome: a.nome, preco: a.preco };
-                }),
-              });
+              carrinho.adicionar(produtoSheet, adicionaisEscolhidos, quantidade);
               setProdutoSheet(null);
             }}
           />
@@ -368,7 +370,7 @@ export default function MobileCardapio({
 }
 
 // Foto do produto ou placeholder com xícara
-function FotoProduto({ produto, className }: { produto: ProdutoMobile; className: string }) {
+export function FotoProduto({ produto, className }: { produto: ProdutoMobile; className: string }) {
   if (produto.fotoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={produto.fotoUrl} alt={produto.nome} className={className + " object-cover"} />;
@@ -383,14 +385,16 @@ function FotoProduto({ produto, className }: { produto: ProdutoMobile; className
 interface SheetProps {
   produto: ProdutoMobile;
   onFechar: () => void;
-  onAdicionar: (adicionais: AdicionalMobile[], quantidade: number) => void;
+  onAdicionar: (adicionais: AdicionalMobile[], quantidade: number, observacao?: string) => void;
+  mostrarObservacao?: boolean;   // totem: campo de observação no item
 }
 
 // Bottom sheet: desliza de baixo, fecha com swipe down ou toque no overlay
-function SheetAdicionais({ produto, onFechar, onAdicionar }: SheetProps) {
+export function SheetAdicionais({ produto, onFechar, onAdicionar, mostrarObservacao = false }: SheetProps) {
   const dragControls = useDragControls();
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [quantidade,   setQuantidade]   = useState(1);
+  const [observacao,   setObservacao]   = useState("");
 
   // Trava o scroll da página enquanto o sheet está aberto
   useEffect(function () {
@@ -458,6 +462,8 @@ function SheetAdicionais({ produto, onFechar, onAdicionar }: SheetProps) {
           </div>
           {produto.descricao && <p className="text-sm text-gray-500 mt-1">{produto.descricao}</p>}
 
+          {produto.adicionais.length > 0 && (
+          <>
           <p className="mt-5 mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">Adicionais</p>
           <ul className="flex flex-col divide-y divide-gray-100">
             {produto.adicionais.map(function (a) {
@@ -486,6 +492,26 @@ function SheetAdicionais({ produto, onFechar, onAdicionar }: SheetProps) {
               );
             })}
           </ul>
+          </>
+          )}
+
+          {/* Observação do item (totem) */}
+          {mostrarObservacao && (
+            <div className="mt-5">
+              <label htmlFor="obs-item" className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                Observação
+              </label>
+              <textarea
+                id="obs-item"
+                rows={2}
+                value={observacao}
+                onChange={function (e) { setObservacao(e.target.value); }}
+                placeholder="Ex.: sem açúcar, leite por último…"
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-base text-[#3B2415]
+                           focus:outline-none focus:border-[#C8A96E]"
+              />
+            </div>
+          )}
 
           {/* Contador de quantidade */}
           <div className="mt-5 flex items-center justify-between">
@@ -520,7 +546,7 @@ function SheetAdicionais({ produto, onFechar, onAdicionar }: SheetProps) {
           <motion.button
             type="button"
             whileTap={{ scale: 0.97 }}
-            onClick={function () { onAdicionar(escolhidos, quantidade); }}
+            onClick={function () { onAdicionar(escolhidos, quantidade, observacao.trim() || undefined); }}
             className="w-full h-14 rounded-xl bg-[#3B2415] text-cb-bege font-bold text-[15px]"
           >
             Adicionar ao carrinho · {formatarMoeda(unitario * quantidade)}

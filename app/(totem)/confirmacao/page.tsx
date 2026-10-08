@@ -5,6 +5,7 @@ import { playClick } from "@/lib/sounds";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { printCupom } from "@/lib/sunmi-print";
+import { useTotemMobile } from "@/contexts/TotemModoContext";
 
 const STATUS_INFO: Record<string, { icone: string; texto: string; cor: string }> = {
   RECEBIDO:             { icone: "⏳", texto: "Recebido",                         cor: "text-cb-amber" },
@@ -27,6 +28,7 @@ interface ItemDoPedido {
 function ConfirmacaoConteudo() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const mobile = useTotemMobile(); // celular: botões empilhados
   // Senha da URL é só o valor inicial; a fonte da verdade é pedido.senha do banco
   const senhaUrl = searchParams.get("senha")   ?? "CB-???";
   const pedidoId = searchParams.get("id")     ?? "";
@@ -243,8 +245,8 @@ function ConfirmacaoConteudo() {
             </div>
           )}
 
-          {/* 6. Botões de ação principais — lado a lado, mesma largura */}
-          <div className="flex gap-3 w-full">
+          {/* 6. Botões de ação principais — lado a lado (totem) ou empilhados (celular) */}
+          <div className={"flex gap-3 w-full " + (mobile ? "flex-col" : "")}>
             {!isMesa && (
               <button
                 onClick={function() { playClick(); router.push("/"); }}
@@ -266,7 +268,7 @@ function ConfirmacaoConteudo() {
           {/* 7. Seção de impressão — card único */}
           {impressaoAtiva && itensPedido.length > 0 && (
             <div className="w-full bg-white/60 border border-cb-marrom/10 rounded-3xl p-4 flex flex-col gap-3 mt-2">
-              <div className="flex gap-3 w-full">
+              <div className={"flex gap-3 w-full " + (mobile ? "flex-col" : "")}>
                 {/* Comanda (mesa) não tem via do cliente: só a comanda fica, em largura total */}
                 {!isComanda && botaoImpressao("CLIENTE", statusReimprimirCliente, "🖨️ Imprimir comprovante")}
                 {botaoImpressao("COZINHA", statusReimprimirCozinha, "🖨️ Imprimir comanda")}

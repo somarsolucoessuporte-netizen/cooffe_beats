@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
 import MobileCardapio, { type AdicionalMobile } from "@/components/web/MobileCardapio";
+import { useCarrinhoWebMobile } from "@/components/web/carrinhoWebMobile";
 
 interface Categoria {
   id: string;
@@ -33,6 +34,7 @@ const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
 export default function CardapioWebClient({ categorias, produtosIniciais, categoriaInicialId }: Props) {
   const { adicionarItem, totalItens } = useWebCarrinho();
+  const carrinhoMobile = useCarrinhoWebMobile();
 
   const [categoriaAtiva,  setCategoriaAtiva]  = useState(categoriaInicialId);
   const [produtos,        setProdutos]         = useState<Produto[]>(produtosIniciais);
@@ -72,6 +74,7 @@ export default function CardapioWebClient({ categorias, produtosIniciais, catego
     {/* Mobile (< 768px): fluxo categorias → produtos */}
     <div className="cb-so-mobile">
       <MobileCardapio
+        carrinho={carrinhoMobile}
         categorias={categorias}
         produtosIniciais={produtosIniciais}
         categoriaInicialId={categoriaInicialId}

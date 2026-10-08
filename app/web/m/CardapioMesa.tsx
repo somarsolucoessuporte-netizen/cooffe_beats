@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { QrCode } from "lucide-react";
 import MobileSplash from "@/components/web/MobileSplash";
 import MobileCardapio, { type CategoriaMobile, type ProdutoMobile } from "@/components/web/MobileCardapio";
+import { useCarrinhoWebMobile } from "@/components/web/carrinhoWebMobile";
 import { buscarRotuloMesa, gravarSessaoMesa, lerSessaoMesa } from "@/lib/sessao-mesa";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
@@ -22,6 +23,7 @@ type Estado = "carregando" | "ok" | "sem-mesa";
 export default function CardapioMesa({
   categorias, produtosIniciais, categoriaInicialId, mesaQuery, clienteQuery, wppQuery,
 }: Props) {
+  const carrinho = useCarrinhoWebMobile();
   const [estado,     setEstado]     = useState<Estado>("carregando");
   const [nome,       setNome]       = useState("");
   const [rotuloMesa, setRotuloMesa] = useState("");
@@ -85,6 +87,7 @@ export default function CardapioMesa({
     <>
       <MobileSplash sempre />
       <MobileCardapio
+        carrinho={carrinho}
         categorias={categorias}
         produtosIniciais={produtosIniciais}
         categoriaInicialId={categoriaInicialId}

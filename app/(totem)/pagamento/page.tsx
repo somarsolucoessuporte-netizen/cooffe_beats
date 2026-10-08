@@ -7,6 +7,7 @@ import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
 import { iniciarPagamentoNFC } from "@/lib/sunmi";
+import { useTotemMobile } from "@/contexts/TotemModoContext";
 import { printCupom } from "@/lib/sunmi-print";
 
 type Tela = "escolha" | "pix" | "cartao" | "maquininha";
@@ -122,6 +123,9 @@ function ModalConfirmacaoManual({ onConfirmar, onFechar }: {
   );
 }
 
+// Card de método de pagamento no celular: linha horizontal, ícone + nome + detalhe
+const CARD_MOBILE = "w-full flex flex-row items-center gap-4 px-5 py-4 min-h-[80px] text-[18px] ";
+
 function formatarTempo(seg: number): string {
   var m = Math.floor(seg / 60);
   var s = seg % 60;
@@ -131,6 +135,7 @@ function formatarTempo(seg: number): string {
 export default function Pagamento() {
   const router = useRouter();
   const { itens, totalValor, empresaId, limparCarrinho } = useCarrinho();
+  const mobile = useTotemMobile(); // celular: cards de pagamento empilhados
 
   const [tela, setTela]                 = useState<Tela>("escolha");
   const [carregando, setCarregando]     = useState(false);
@@ -590,6 +595,18 @@ export default function Pagamento() {
                   className="rounded-lg"
                 />
                 <p className="text-cb-marrom/50 text-sm">Escaneie com o app do banco</p>
+                {/* Celular: o QR está na própria tela, então oferece abrir o mesmo link de pagamento */}
+                {mobile && (
+                  <a
+                    href={checkoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full min-h-[56px] rounded-2xl bg-cb-marrom text-cb-bege font-extrabold text-[18px]
+                               flex items-center justify-center px-4"
+                  >
+                    Abrir link de pagamento
+                  </a>
+                )}
                 <div className="flex items-center gap-2 text-cb-marrom/70">
                   <span className="text-sm">Expira em:</span>
                   <span className={"font-mono font-bold text-lg " + (tempoRestante < 60 ? "text-red-500" : "text-cb-marrom")}>
@@ -696,9 +713,9 @@ export default function Pagamento() {
     <div className="h-full flex flex-col animate-fadeIn">
       <HeaderTotem />
 
-      <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
+      <div className={"flex-1 flex flex-col items-center overflow-y-auto " + (mobile ? "justify-start p-4 pt-8 gap-6" : "justify-center p-8 gap-8")}>
         <div className="text-center">
-          <h1 className="font-sans font-extrabold text-4xl text-cb-marrom">Como deseja pagar?</h1>
+          <h1 className={"font-sans font-extrabold text-cb-marrom " + (mobile ? "text-2xl" : "text-4xl")}>Como deseja pagar?</h1>
           <p className="text-cb-marrom/60 mt-2 text-xl">
             Total:{" "}
             <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
@@ -716,49 +733,47 @@ export default function Pagamento() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-5 w-full max-w-xl">
+        <div className={mobile ? "flex flex-col gap-3 w-full" : "grid grid-cols-2 gap-5 w-full max-w-xl"}>
           {/* PIX */}
           <button
             onClick={function() { selecionarMetodo("PIX"); }}
             disabled={carregando}
-            className="flex flex-col items-center gap-3 bg-white border-2 border-cb-marrom/20
-                       rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem
-                       hover:border-cb-amber hover:bg-cb-bege/50 transition-colors
-                       disabled:opacity-60"
+            className={(mobile ? CARD_MOBILE : "flex flex-col items-center gap-3 p-6 min-h-[130px] ") +
+                       "bg-white border-2 border-cb-marrom/20 rounded-2xl touch-manipulation btn-totem " +
+                       "hover:border-cb-amber hover:bg-cb-bege/50 transition-colors disabled:opacity-60"}
           >
             <span className="text-4xl">📱</span>
-            <span className="font-sans font-extrabold text-cb-marrom">PIX</span>
-            <span className="text-xs text-cb-marrom/60">Instantâneo</span>
+            <span className={"font-sans font-extrabold text-cb-marrom " + (mobile ? "text-[18px] flex-1 text-left" : "")}>PIX</span>
+            <span className={mobile ? "text-sm text-cb-marrom/60" : "text-xs text-cb-marrom/60"}>Instantâneo</span>
           </button>
 
           {/* Cartão */}
           <button
             onClick={function() { selecionarMetodo("CARTAO"); }}
             disabled={carregando}
-            className="flex flex-col items-center gap-3 bg-white border-2 border-cb-marrom/20
-                       rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem
-                       hover:border-cb-amber hover:bg-cb-bege/50 transition-colors
-                       disabled:opacity-60"
+            className={(mobile ? CARD_MOBILE : "flex flex-col items-center gap-3 p-6 min-h-[130px] ") +
+                       "bg-white border-2 border-cb-marrom/20 rounded-2xl touch-manipulation btn-totem " +
+                       "hover:border-cb-amber hover:bg-cb-bege/50 transition-colors disabled:opacity-60"}
           >
             <span className="text-4xl">💳</span>
-            <span className="font-sans font-extrabold text-cb-marrom">Cartão</span>
-            <span className="text-xs text-cb-marrom/60">Débito ou crédito</span>
+            <span className={"font-sans font-extrabold text-cb-marrom " + (mobile ? "text-[18px] flex-1 text-left" : "")}>Cartão</span>
+            <span className={mobile ? "text-sm text-cb-marrom/60" : "text-xs text-cb-marrom/60"}>Débito ou crédito</span>
           </button>
 
           {/* Dinheiro — imprime imediatamente, paga no balcão */}
           <button
             onClick={selecionarDinheiro}
-            className={"flex flex-col items-center gap-3 bg-white border-2 rounded-2xl p-6 min-h-[130px] touch-manipulation btn-totem hover:border-cb-amber hover:bg-cb-bege/50 transition-colors " + (carregandoDinheiro ? "border-cb-amber opacity-70 cursor-wait" : "border-cb-marrom/20")}
+            className={(mobile ? CARD_MOBILE : "flex flex-col items-center gap-3 p-6 min-h-[130px] ") + "bg-white border-2 rounded-2xl touch-manipulation btn-totem hover:border-cb-amber hover:bg-cb-bege/50 transition-colors " + (carregandoDinheiro ? "border-cb-amber opacity-70 cursor-wait" : "border-cb-marrom/20")}
           >
             <span className="text-4xl">💵</span>
-            <span className="font-sans font-extrabold text-cb-marrom">
+            <span className={"font-sans font-extrabold text-cb-marrom " + (mobile ? "text-[18px] flex-1 text-left" : "")}>
               {carregandoDinheiro ? "Processando..." : "Dinheiro"}
             </span>
-            <span className="text-xs text-cb-marrom/60">Pagar no balcão</span>
+            <span className={mobile ? "text-sm text-cb-marrom/60" : "text-xs text-cb-marrom/60"}>Pagar no balcão</span>
           </button>
 
           {/* Placeholder para manter grid simétrico */}
-          <div />
+          {!mobile && <div />}
         </div>
 
         {carregando && (

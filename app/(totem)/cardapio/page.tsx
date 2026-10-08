@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import SidebarCategorias from "@/components/totem/SidebarCategorias";
 import TopbarCardapio from "@/components/totem/TopbarCardapio";
 import GradeProdutos from "@/components/totem/GradeProdutos";
+import CardapioTotemMobile from "@/components/totem/CardapioTotemMobile";
+import { useTotemMobile } from "@/contexts/TotemModoContext";
 
 interface Categoria {
   id: string;
@@ -27,6 +29,13 @@ interface Produto {
 const CATEGORIAS_OCULTAS_TOTEM = ["Adicionais"];
 
 export default function Cardapio() {
+  // Celular: layout mobile próprio (ver CardapioTotemMobile); totem segue igual
+  const mobile = useTotemMobile();
+  if (mobile) return <CardapioTotemMobile />;
+  return <CardapioTotem />;
+}
+
+function CardapioTotem() {
   const empresaId = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
   const [categorias, setCategorias] = useState<Categoria[]>([]);
