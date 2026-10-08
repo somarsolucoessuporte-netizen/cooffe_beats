@@ -10,7 +10,11 @@ export async function proxy(req: NextRequest) {
 
   // ── Rotas do portal web do cliente (/web/*) → Supabase Auth ───────────────
   if (pathname.startsWith("/web")) {
-    if (pathname === "/web/login" || pathname === "/web/termos") {
+    // /web/m = cardápio da mesa via QR (identificação por nome+WhatsApp, sem login)
+    if (
+      pathname === "/web/login" || pathname === "/web/termos" ||
+      pathname === "/web/m" || pathname.startsWith("/web/m/")
+    ) {
       return NextResponse.next();
     }
 

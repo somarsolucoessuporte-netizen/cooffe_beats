@@ -46,6 +46,9 @@ export default function WebNavbar() {
     { href: "/web/conta",     label: "Minha Conta" },
   ];
 
+  // Cardápio da mesa (/web/m) não usa a navbar do portal
+  if (pathname === "/web/m" || pathname.startsWith("/web/m/")) return null;
+
   return (
     <header
       className={

@@ -14,6 +14,12 @@ function formatarWhatsApp(valor: string): string {
   return "(" + nums.slice(0, 2) + ") " + nums.slice(2, 7) + "-" + nums.slice(7, 11);
 }
 
+// Cardápio mobile da mesa — nome/WhatsApp ficam no sessionStorage (mesma origem),
+// então não vão na URL
+function urlCardapioMesa(mesaId: string): string {
+  return "/web/m?mesa=" + encodeURIComponent(mesaId);
+}
+
 export default function MesaPage({ params }: { params: Promise<{ mesaId: string }> }) {
   const { mesaId } = use(params);
   const router = useRouter();
@@ -31,7 +37,7 @@ export default function MesaPage({ params }: { params: Promise<{ mesaId: string 
       var existingCliente = sessionStorage.getItem("clienteId") ?? "";
       var expiry          = Number(sessionStorage.getItem("mesaSessionExpiry") ?? "0");
       if (existingMesa === mesaId && existingCliente && (!expiry || Date.now() < expiry)) {
-        router.replace("/cardapio");
+        router.replace(urlCardapioMesa(mesaId));
         return;
       }
     } catch(e) {}
@@ -46,7 +52,7 @@ export default function MesaPage({ params }: { params: Promise<{ mesaId: string 
   function pular() {
     playClick();
     try { sessionStorage.setItem("mesaId", mesaId); } catch(e) {}
-    router.push("/cardapio");
+    router.push(urlCardapioMesa(mesaId));
   }
 
   async function confirmar() {
@@ -75,7 +81,7 @@ export default function MesaPage({ params }: { params: Promise<{ mesaId: string 
           sessionStorage.setItem("clienteWpp",  d.data.whatsapp);
           sessionStorage.setItem("mesaId",      mesaId);
         } catch(e) {}
-        router.push("/cardapio");
+        router.push(urlCardapioMesa(mesaId));
       } else {
         setErro(d.error ?? "Erro ao salvar.");
       }

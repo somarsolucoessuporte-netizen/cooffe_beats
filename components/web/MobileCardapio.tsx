@@ -41,6 +41,10 @@ interface Props {
   categorias:         CategoriaMobile[];
   produtosIniciais:   ProdutoMobile[];
   categoriaInicialId: string;
+  // Modo mesa (/web/m): nome vem da identificação da mesa, sem consultar o login
+  nomeCliente?:       string;
+  rotuloMesa?:        string;       // ex.: "Mesa 5"
+  carrinhoHref?:      string;       // padrão: /web/carrinho
 }
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
@@ -91,7 +95,10 @@ function mapearProduto(p: ProdutoApi): ProdutoMobile {
 }
 
 // Cardápio mobile (< 768px): categorias em grade → produtos → bottom sheet de adicionais
-export default function MobileCardapio({ categorias, produtosIniciais, categoriaInicialId }: Props) {
+export default function MobileCardapio({
+  categorias, produtosIniciais, categoriaInicialId,
+  nomeCliente, rotuloMesa, carrinhoHref = "/web/carrinho",
+}: Props) {
   const { adicionarItem, totalItens, totalValor } = useWebCarrinho();
 
   const [nome,           setNome]           = useState("");
@@ -105,12 +112,12 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
 
   // Primeiro nome do cliente para a saudação
   useEffect(function () {
-    console.log("MOBILE MONTOU"); // DEBUG TEMPORÁRIO
+    if (nomeCliente !== undefined) return; // modo mesa: nome já informado
     fetch("/api/web/me")
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.ok && d.data.nome) setNome(String(d.data.nome).split(" ")[0]); })
       .catch(function () {});
-  }, []);
+  }, [nomeCliente]);
 
   async function abrirCategoria(catId: string) {
     setCategoriaAtiva(catId);
@@ -147,20 +154,23 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
     setTimeout(function () { setAdicionado(null); }, 1200);
   }
 
+  const saudacao  = nomeCliente !== undefined ? nomeCliente.split(" ")[0] : nome;
   const categoria = categorias.find(function (c) { return c.id === categoriaAtiva; }) ?? null;
   const produtos  = categoriaAtiva ? cache[categoriaAtiva] ?? [] : [];
 
   return (
-    // DEBUG TEMPORÁRIO: borda vermelha para confirmar montagem no mobile
-    <div className="min-h-[calc(100dvh-64px)] bg-white" style={{ border: "4px solid red" }}>
+    <div className="min-h-[calc(100dvh-64px)] bg-white">
 
       {/* HEADER */}
       <header className="sticky top-0 z-30 h-16 px-4 flex items-center justify-between bg-[#3B2415]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="Coffee & Beats" className="w-10 h-10 object-contain brightness-0 invert" />
         <div className="flex items-center gap-4">
-          {nome && <span className="text-cb-bege text-sm font-semibold truncate max-w-[160px]">Olá, {nome}!</span>}
-          <Link href="/web/carrinho" aria-label="Carrinho" className="relative text-cb-bege p-1">
+          <div className="flex flex-col items-end leading-tight">
+            {saudacao && <span className="text-cb-bege text-sm font-semibold truncate max-w-[160px]">Olá, {saudacao}!</span>}
+            {rotuloMesa && <span className="text-[#C8A96E] text-xs font-semibold">{rotuloMesa}</span>}
+          </div>
+          <Link href={carrinhoHref} aria-label="Carrinho" className="relative text-cb-bege p-1">
             <ShoppingCart size={24} />
             {totalItens > 0 && (
               <span className="absolute -top-1 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#C8A96E]
@@ -311,7 +321,7 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
             className="fixed inset-x-0 z-30 px-4 pb-4 bottom-[calc(64px+env(safe-area-inset-bottom))]"
           >
-            <Link href="/web/carrinho">
+            <Link href={carrinhoHref}>
               <motion.div
                 whileTap={{ scale: 0.98 }}
                 className="h-16 rounded-2xl px-4 flex items-center justify-between bg-[#3B2415]

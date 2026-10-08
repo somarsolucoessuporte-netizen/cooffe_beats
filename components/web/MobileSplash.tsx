@@ -9,19 +9,19 @@ const DURACAO_MS   = 2000;
 const QUERY_MOBILE = "(max-width: 767.98px), (hover: none) and (pointer: coarse) and (max-width: 1100px)";
 
 // Splash com a logo animada — só no mobile (< 768px) e uma vez por sessão
-export default function MobileSplash() {
+export default function MobileSplash({ sempre = false }: { sempre?: boolean }) {
   const [visivel, setVisivel] = useState(false);
 
   useEffect(function () {
     let jaExibido = false;
     try { jaExibido = sessionStorage.getItem(CHAVE_SESSAO) === "1"; } catch {}
-    if (jaExibido || !window.matchMedia(QUERY_MOBILE).matches) return;
+    if (jaExibido || (!sempre && !window.matchMedia(QUERY_MOBILE).matches)) return;
 
     try { sessionStorage.setItem(CHAVE_SESSAO, "1"); } catch {}
     setVisivel(true);
     const t = setTimeout(function () { setVisivel(false); }, DURACAO_MS);
     return function () { clearTimeout(t); };
-  }, []);
+  }, [sempre]);
 
   return (
     <AnimatePresence>
