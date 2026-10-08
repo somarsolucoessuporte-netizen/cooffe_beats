@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Portal web: alterna layout mobile/desktop — tela < 768px OU aparelho touch até 1100px
+   (cobre celular em modo "site para computador" e tablets). Mesma regra em MobileSplash.tsx */
+.cb-so-mobile { display: none !important; }
+@media (max-width: 767.98px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .cb-so-mobile  { display: block !important; }
+  .cb-so-desktop { display: none !important; }
+}
+
 @theme {
   /* Cores Coffee & Beats */
   --color-cb-espresso: #1A0A00;

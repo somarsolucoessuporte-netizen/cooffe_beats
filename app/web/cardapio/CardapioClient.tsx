@@ -70,7 +70,7 @@ export default function CardapioWebClient({ categorias, produtosIniciais, catego
   return (
     <>
     {/* Mobile (< 768px): fluxo categorias → produtos */}
-    <div className="block md:hidden">
+    <div className="cb-so-mobile">
       <MobileCardapio
         categorias={categorias}
         produtosIniciais={produtosIniciais}
@@ -79,7 +79,7 @@ export default function CardapioWebClient({ categorias, produtosIniciais, catego
     </div>
 
     {/* Desktop: layout original */}
-    <div className="hidden md:block max-w-screen-xl mx-auto px-4 py-6">
+    <div className="cb-so-desktop max-w-screen-xl mx-auto px-4 py-6">
 
       {/* Banner de boas-vindas */}
       <div className="mb-8 rounded-3xl overflow-hidden bg-cb-marrom px-8 py-6 flex items-center justify-between">

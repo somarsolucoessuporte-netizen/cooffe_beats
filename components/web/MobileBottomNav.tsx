@@ -26,10 +26,10 @@ export default function MobileBottomNav() {
   return (
     <>
       {/* Espaço reservado para o conteúdo não ficar atrás da barra */}
-      <div className="md:hidden h-[calc(64px+env(safe-area-inset-bottom))]" />
+      <div className="cb-so-mobile h-[calc(64px+env(safe-area-inset-bottom))]" />
 
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white shadow-[0_-2px_12px_rgba(59,36,21,0.08)]
+        className="cb-so-mobile fixed bottom-0 inset-x-0 z-40 bg-white shadow-[0_-2px_12px_rgba(59,36,21,0.08)]
                    pb-[env(safe-area-inset-bottom)]"
       >
         <div className="h-16 grid grid-cols-4">

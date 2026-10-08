@@ -105,6 +105,7 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
 
   // Primeiro nome do cliente para a saudação
   useEffect(function () {
+    console.log("MOBILE MONTOU"); // DEBUG TEMPORÁRIO
     fetch("/api/web/me")
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.ok && d.data.nome) setNome(String(d.data.nome).split(" ")[0]); })
@@ -150,12 +151,13 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
   const produtos  = categoriaAtiva ? cache[categoriaAtiva] ?? [] : [];
 
   return (
-    <div className="min-h-[calc(100dvh-64px)] bg-white">
+    // DEBUG TEMPORÁRIO: borda vermelha para confirmar montagem no mobile
+    <div className="min-h-[calc(100dvh-64px)] bg-white" style={{ border: "4px solid red" }}>
 
       {/* HEADER */}
       <header className="sticky top-0 z-30 h-16 px-4 flex items-center justify-between bg-[#3B2415]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="Coffee & Beats" className="w-10 h-10 object-contain" />
+        <img src="/logo.png" alt="Coffee & Beats" className="w-10 h-10 object-contain brightness-0 invert" />
         <div className="flex items-center gap-4">
           {nome && <span className="text-cb-bege text-sm font-semibold truncate max-w-[160px]">Olá, {nome}!</span>}
           <Link href="/web/carrinho" aria-label="Carrinho" className="relative text-cb-bege p-1">
