@@ -47,7 +47,13 @@ export default function WebNavbar() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-cb-marrom/10 shadow-sm">
+    <header
+      className={
+        "sticky top-0 z-50 bg-white border-b border-cb-marrom/10 shadow-sm " +
+        // No mobile o cardápio tem header próprio (MobileCardapio)
+        (pathname.startsWith("/web/cardapio") ? "hidden md:block" : "")
+      }
+    >
       <div className="max-w-screen-xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
 
         {/* Logo */}

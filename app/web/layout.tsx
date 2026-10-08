@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import WebNavbar from "@/components/web/WebNavbar";
+import MobileBottomNav from "@/components/web/MobileBottomNav";
 import { WebCarrinhoProvider } from "@/contexts/WebCarrinhoContext";
 
 export const metadata: Metadata = {
@@ -28,6 +29,8 @@ export default function WebLayout({ children }: { children: React.ReactNode }) {
             </a>
           </p>
         </footer>
+        {/* Navegação inferior — apenas mobile */}
+        <MobileBottomNav />
       </div>
     </WebCarrinhoProvider>
   );

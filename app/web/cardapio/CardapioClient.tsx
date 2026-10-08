@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
+import MobileCardapio, { type AdicionalMobile } from "@/components/web/MobileCardapio";
 
 interface Categoria {
   id: string;
@@ -19,6 +20,7 @@ interface Produto {
   fotoUrl: string | null;
   destaque: boolean;
   categoriaId: string;
+  adicionais:  AdicionalMobile[];
 }
 
 interface Props {
@@ -66,7 +68,18 @@ export default function CardapioWebClient({ categorias, produtosIniciais, catego
   }
 
   return (
-    <div className="max-w-screen-xl mx-auto px-4 py-6">
+    <>
+    {/* Mobile (< 768px): fluxo categorias → produtos */}
+    <div className="md:hidden">
+      <MobileCardapio
+        categorias={categorias}
+        produtosIniciais={produtosIniciais}
+        categoriaInicialId={categoriaInicialId}
+      />
+    </div>
+
+    {/* Desktop: layout original */}
+    <div className="hidden md:block max-w-screen-xl mx-auto px-4 py-6">
 
       {/* Banner de boas-vindas */}
       <div className="mb-8 rounded-3xl overflow-hidden bg-cb-marrom px-8 py-6 flex items-center justify-between">
@@ -230,5 +243,6 @@ export default function CardapioWebClient({ categorias, produtosIniciais, catego
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -2,18 +2,33 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from "react";
 
+export interface AdicionalWebCarrinho {
+  adicionalId: string;
+  nome: string;
+  preco: number;
+}
+
 export interface ItemWebCarrinho {
   produtoId: string;
   nome: string;
-  preco: number;
+  preco: number;            // preço unitário já somando os adicionais
   quantidade: number;
   fotoUrl?: string | null;
+  adicionais?: AdicionalWebCarrinho[];
+  chave?: string;           // identifica a linha (produto + adicionais escolhidos)
+}
+
+// Chave da linha do carrinho — itens antigos (sem chave) usam o produtoId
+export function chaveItem(item: ItemWebCarrinho): string {
+  if (item.chave) return item.chave;
+  var ids = (item.adicionais ?? []).map(function (a) { return a.adicionalId; }).sort();
+  return ids.length ? item.produtoId + "|" + ids.join(",") : item.produtoId;
 }
 
 type CarrinhoAction =
   | { type: "ADICIONAR"; item: ItemWebCarrinho }
-  | { type: "ALTERAR_QTD"; produtoId: string; quantidade: number }
-  | { type: "REMOVER"; produtoId: string }
+  | { type: "ALTERAR_QTD"; chave: string; quantidade: number }
+  | { type: "REMOVER"; chave: string }
   | { type: "LIMPAR" }
   | { type: "CARREGAR"; itens: ItemWebCarrinho[] };
 
@@ -28,30 +43,31 @@ function reducer(state: CarrinhoState, action: CarrinhoAction): CarrinhoState {
       return { ...state, itens: action.itens, hidratado: true };
 
     case "ADICIONAR": {
-      const existe = state.itens.findIndex((i) => i.produtoId === action.item.produtoId);
+      const chave = chaveItem(action.item);
+      const existe = state.itens.findIndex((i) => chaveItem(i) === chave);
       if (existe >= 0) {
         const novos = state.itens.map((i, idx) =>
           idx === existe ? { ...i, quantidade: i.quantidade + action.item.quantidade } : i
         );
         return { ...state, itens: novos };
       }
-      return { ...state, itens: [...state.itens, action.item] };
+      return { ...state, itens: [...state.itens, { ...action.item, chave }] };
     }
 
     case "ALTERAR_QTD": {
       if (action.quantidade <= 0) {
-        return { ...state, itens: state.itens.filter((i) => i.produtoId !== action.produtoId) };
+        return { ...state, itens: state.itens.filter((i) => chaveItem(i) !== action.chave) };
       }
       return {
         ...state,
         itens: state.itens.map((i) =>
-          i.produtoId === action.produtoId ? { ...i, quantidade: action.quantidade } : i
+          chaveItem(i) === action.chave ? { ...i, quantidade: action.quantidade } : i
         ),
       };
     }
 
     case "REMOVER":
-      return { ...state, itens: state.itens.filter((i) => i.produtoId !== action.produtoId) };
+      return { ...state, itens: state.itens.filter((i) => chaveItem(i) !== action.chave) };
 
     case "LIMPAR":
       return { ...state, itens: [] };
@@ -67,8 +83,8 @@ interface WebCarrinhoContextValue {
   totalValor: number;
   hidratado: boolean;
   adicionarItem: (item: ItemWebCarrinho) => void;
-  alterarQuantidade: (produtoId: string, quantidade: number) => void;
-  removerItem: (produtoId: string) => void;
+  alterarQuantidade: (chave: string, quantidade: number) => void;
+  removerItem: (chave: string) => void;
   limparCarrinho: () => void;
 }
 
@@ -102,12 +118,12 @@ export function WebCarrinhoProvider({ children }: { children: React.ReactNode })
     dispatch({ type: "ADICIONAR", item });
   }, []);
 
-  const alterarQuantidade = useCallback((produtoId: string, quantidade: number) => {
-    dispatch({ type: "ALTERAR_QTD", produtoId, quantidade });
+  const alterarQuantidade = useCallback((chave: string, quantidade: number) => {
+    dispatch({ type: "ALTERAR_QTD", chave, quantidade });
   }, []);
 
-  const removerItem = useCallback((produtoId: string) => {
-    dispatch({ type: "REMOVER", produtoId });
+  const removerItem = useCallback((chave: string) => {
+    dispatch({ type: "REMOVER", chave });
   }, []);
 
   const limparCarrinho = useCallback(() => {

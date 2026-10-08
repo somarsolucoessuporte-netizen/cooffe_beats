@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
+import { useWebCarrinho, chaveItem } from "@/contexts/WebCarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
 
 interface UsuarioWeb { clienteId: string | null; nome: string }
@@ -90,7 +90,14 @@ export default function WebCarrinho() {
       var res = await fetch("/api/web/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          itens: itens.map(function (i) { return { produtoId: i.produtoId, quantidade: i.quantidade, precoUnit: i.preco }; }),
+          itens: itens.map(function (i) {
+            return {
+              produtoId:  i.produtoId,
+              quantidade: i.quantidade,
+              precoUnit:  i.preco,
+              adicionais: (i.adicionais ?? []).map(function (a) { return { adicionalId: a.adicionalId, preco: a.preco }; }),
+            };
+          }),
           cupomId:       cupomAtivo?.id       ?? undefined,
           valorDesconto: cupomAtivo?.desconto ?? undefined,
         }),
@@ -112,7 +119,14 @@ export default function WebCarrinho() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           itens: itens.map(function (i) {
-            return { produtoId: i.produtoId, nome: i.nome, preco: i.preco, quantidade: i.quantidade, fotoUrl: i.fotoUrl };
+            return {
+              produtoId:  i.produtoId,
+              nome:       i.nome,
+              preco:      i.preco,
+              quantidade: i.quantidade,
+              fotoUrl:    i.fotoUrl,
+              adicionais: (i.adicionais ?? []).map(function (a) { return { adicionalId: a.adicionalId, preco: a.preco }; }),
+            };
           }),
           total:           totalComDesconto,
           previsaoChegada: previsao.toISOString(),
@@ -164,7 +178,7 @@ export default function WebCarrinho() {
         <div className="flex flex-col gap-3">
           {itens.map(function (item, idx) {
             return (
-              <div key={item.produtoId + idx} className="bg-white border border-cb-marrom/10 rounded-2xl p-4 flex gap-4 shadow-sm">
+              <div key={chaveItem(item) + idx} className="bg-white border border-cb-marrom/10 rounded-2xl p-4 flex gap-4 shadow-sm">
                 <div className="w-16 h-16 rounded-xl bg-cb-bege overflow-hidden shrink-0">
                   {item.fotoUrl
                     ? <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" /> // eslint-disable-line @next/next/no-img-element
@@ -172,17 +186,22 @@ export default function WebCarrinho() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-cb-marrom leading-snug truncate">{item.nome}</p>
+                  {item.adicionais && item.adicionais.length > 0 && (
+                    <p className="text-cb-marrom/50 text-xs truncate">
+                      + {item.adicionais.map(function (a) { return a.nome; }).join(", ")}
+                    </p>
+                  )}
                   <p className="text-cb-amber font-extrabold mt-0.5">{formatarMoeda(item.preco * item.quantidade)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <div className="flex items-center gap-2">
-                    <button onClick={function () { alterarQuantidade(item.produtoId, item.quantidade - 1); }}
+                    <button onClick={function () { alterarQuantidade(chaveItem(item), item.quantidade - 1); }}
                       className="w-8 h-8 rounded-full bg-cb-marrom/10 text-cb-marrom font-bold text-sm flex items-center justify-center hover:bg-cb-marrom/20 transition-colors">−</button>
                     <span className="font-bold text-cb-marrom w-5 text-center">{item.quantidade}</span>
-                    <button onClick={function () { alterarQuantidade(item.produtoId, item.quantidade + 1); }}
+                    <button onClick={function () { alterarQuantidade(chaveItem(item), item.quantidade + 1); }}
                       className="w-8 h-8 rounded-full bg-cb-amber text-white font-bold text-sm flex items-center justify-center hover:bg-cb-amber/90 transition-colors">+</button>
                   </div>
-                  <button onClick={function () { removerItem(item.produtoId); }} className="text-red-400 text-xs hover:text-red-600 transition-colors">Remover</button>
+                  <button onClick={function () { removerItem(chaveItem(item)); }} className="text-red-400 text-xs hover:text-red-600 transition-colors">Remover</button>
                 </div>
               </div>
             );

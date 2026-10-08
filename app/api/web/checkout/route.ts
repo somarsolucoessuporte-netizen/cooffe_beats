@@ -8,8 +8,9 @@ import { supabaseAdmin } from "@/lib/supabase";
 const ItemSchema = z.object({
   produtoId:  z.string(),
   quantidade: z.number().int().positive(),
-  precoUnit:  z.number().positive(),
+  precoUnit:  z.number().positive(),        // já inclui os adicionais
   observacao: z.string().optional(),
+  adicionais: z.array(z.object({ adicionalId: z.string(), preco: z.number() })).optional(),
 });
 
 const CheckoutSchema = z.object({
@@ -76,6 +77,11 @@ export async function POST(req: NextRequest) {
                 precoUnit:  item.precoUnit,
                 precoTotal: item.precoUnit * item.quantidade,
                 observacao: item.observacao ?? null,
+                adicionais: {
+                  create: (item.adicionais ?? []).map(function (a) {
+                    return { adicionalId: a.adicionalId, preco: a.preco };
+                  }),
+                },
               };
             }),
           },

@@ -14,6 +14,7 @@ const ItemSchema = z.object({
   preco:      z.number().positive(),
   quantidade: z.number().int().positive(),
   fotoUrl:    z.string().nullable().optional(),
+  adicionais: z.array(z.object({ adicionalId: z.string(), preco: z.number() })).optional(),
 });
 
 const Schema = z.object({

@@ -61,7 +61,10 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
 
-      type ItemSessao = { produtoId: string; nome: string; preco: number; quantidade: number };
+      type ItemSessao = {
+        produtoId: string; nome: string; preco: number; quantidade: number;
+        adicionais?: { adicionalId: string; preco: number }[];
+      };
       const itens = sessao.itensJson as ItemSessao[];
       const subtotal = Number(sessao.total);
 
@@ -85,6 +88,11 @@ export async function POST(req: NextRequest) {
                 quantidade: item.quantidade,
                 precoUnit:  item.preco,
                 precoTotal: item.preco * item.quantidade,
+                adicionais: {
+                  create: (item.adicionais ?? []).map(function (a) {
+                    return { adicionalId: a.adicionalId, preco: a.preco };
+                  }),
+                },
               };
             }),
           },
