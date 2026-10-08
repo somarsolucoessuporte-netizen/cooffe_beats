@@ -70,7 +70,7 @@ export default function CardapioWebClient({ categorias, produtosIniciais, catego
   return (
     <>
     {/* Mobile (< 768px): fluxo categorias → produtos */}
-    <div className="md:hidden">
+    <div className="block md:hidden">
       <MobileCardapio
         categorias={categorias}
         produtosIniciais={produtosIniciais}

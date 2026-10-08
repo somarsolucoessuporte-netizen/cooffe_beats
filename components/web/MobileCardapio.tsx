@@ -5,7 +5,10 @@ import Link from "next/link";
 import {
   AnimatePresence, motion, useDragControls, type PanInfo,
 } from "framer-motion";
-import { ArrowLeft, Check, Coffee, Minus, Plus, ShoppingCart } from "lucide-react";
+import {
+  ArrowLeft, Cake, Check, Coffee, Cookie, Croissant, Egg, GlassWater, Minus, Plus, Salad,
+  Sandwich, ShoppingCart, UtensilsCrossed, Wheat, type LucideIcon,
+} from "lucide-react";
 import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
 
@@ -46,6 +49,29 @@ type ProdutoApi = {
   id: string; nome: string; descricao: string; preco: string; fotoUrl: string | null; categoriaId: string;
   adicionais?: { adicional: { id: string; nome: string; preco: string; ativo: boolean } }[];
 };
+
+// Ícone Lucide por palavra-chave do nome da categoria (sem acento, minúsculo)
+const ICONES_CATEGORIA: [string[], LucideIcon][] = [
+  [["chocolate"],                            Coffee],
+  [["soda", "suco", "bebida"],               GlassWater],
+  [["cafe"],                                 Coffee],
+  [["entradinha", "petisco"],                UtensilsCrossed],
+  [["cuscuz", "tapioca", "crepioca"],        Wheat],
+  [["fit", "salada"],                        Salad],
+  [["omelete", "ovo"],                       Egg],
+  [["pao de queijo", "biscoito", "cookie"],  Cookie],
+  [["sanduiche", "lanche", "misto"],         Sandwich],
+  [["croissant"],                            Croissant],
+  [["doce", "bolo", "sobremesa", "torta"],   Cake],
+];
+
+function iconeDaCategoria(nome: string): LucideIcon | null {
+  const n = nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const achado = ICONES_CATEGORIA.find(function ([chaves]) {
+    return chaves.some(function (k) { return n.includes(k); });
+  });
+  return achado ? achado[1] : null;
+}
 
 // Converte o formato da /api/produtos para o formato do mobile
 function mapearProduto(p: ProdutoApi): ProdutoMobile {
@@ -163,6 +189,7 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
             >
               {categorias.map(function (cat) {
                 const ativo = cat.id === categoriaAtiva;
+                const Icone = iconeDaCategoria(cat.nome);
                 return (
                   <motion.button
                     key={cat.id}
@@ -180,7 +207,14 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
                         : "bg-[#F6F0E5] border-[#C8A96E] text-[#3B2415]")
                     }
                   >
-                    <span className="text-[32px] leading-none">{cat.emoji}</span>
+                    {/* Ícone Lucide; sem correspondência, usa a inicial em bold */}
+                    {Icone ? (
+                      <Icone size={28} strokeWidth={2} color={ativo ? "#FFFFFF" : "#C8A96E"} />
+                    ) : (
+                      <span className={"text-[28px] font-extrabold leading-none " + (ativo ? "text-white" : "text-[#C8A96E]")}>
+                        {cat.nome.charAt(0).toUpperCase()}
+                      </span>
+                    )}
                     <span className="text-[15px] font-bold leading-tight text-center line-clamp-2">{cat.nome}</span>
                   </motion.button>
                 );
@@ -206,7 +240,7 @@ export default function MobileCardapio({ categorias, produtosIniciais, categoria
               <ArrowLeft size={18} /> Categorias
             </motion.button>
             <h2 className="text-xl font-extrabold text-[#3B2415] mb-3">
-              {categoria.emoji} {categoria.nome}
+              {categoria.nome}
             </h2>
 
             {carregando && produtos.length === 0 ? (
