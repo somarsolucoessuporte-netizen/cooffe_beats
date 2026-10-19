@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { cancelarPagamentoPoint } from "@/lib/mercadopago";
 
 /**
  * POST /api/pagamentos/cancelar/[pedidoId]
@@ -16,7 +17,7 @@ export async function POST(
   try {
     const pagamento = await prisma.pagamento.findUnique({
       where:  { pedidoId },
-      select: { status: true },
+      select: { status: true, payload: true },
     });
 
     if (pagamento?.status === "APROVADO") {
@@ -33,6 +34,17 @@ export async function POST(
         where: { pedidoId, status: "PENDENTE" },
         data:  { status: "CANCELADO" },
       });
+    }
+
+    // Cobrança ainda aberta na Point do Mercado Pago: cancela na maquininha para
+    // não bloquear a próxima. Falha aqui não trava o cancelamento do pedido.
+    const mp = pagamento?.payload as { provider?: string; paymentIntentId?: string; deviceId?: string } | null;
+    if (pagamento?.status === "PENDENTE" && mp?.provider === "mercadopago" && mp.paymentIntentId && mp.deviceId) {
+      try {
+        await cancelarPagamentoPoint(mp.deviceId, mp.paymentIntentId);
+      } catch (e) {
+        console.warn("[Cancelar] Point não cancelou a intenção:", e instanceof Error ? e.message : e);
+      }
     }
 
     return NextResponse.json({ ok: true });

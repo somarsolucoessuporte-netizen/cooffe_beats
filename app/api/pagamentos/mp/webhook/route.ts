@@ -52,6 +52,16 @@ export async function POST(req: NextRequest) {
         });
         if (pagamento?.pedidoId) await liberarPedidoPago(pagamento.pedidoId);
       }
+    } else if (resultado.status === "FAILED" && referencia) {
+      // Recusado/cancelado/erro na Point: o polling do totem vê RECUSADO e volta à escolha.
+      // Só mexe em pendentes — cancelamento feito pelo totem já gravou CANCELADO.
+      await prisma.pagamento.updateMany({
+        where: { referencia, status: "PENDENTE" },
+        data:  {
+          status:  "RECUSADO",
+          payload: { provider: "mercadopago", paymentIntentId: intentId, ...resultado, evento: body },
+        },
+      });
     }
 
     return Response.json({ ok: true });
