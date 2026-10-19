@@ -376,7 +376,8 @@ export default function Pagamento() {
         return;
       }
 
-      var cobrancaRes = await fetch("/api/pagamentos/sumup/criar", {
+      // Cartão vai para a Point do Mercado Pago; PIX segue pelo SumUp
+      var cobrancaRes = await fetch(metodo === "CARTAO" ? "/api/pagamentos/mp/criar" : "/api/pagamentos/sumup/criar", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
