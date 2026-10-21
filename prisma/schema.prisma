@@ -400,6 +400,9 @@ model CheckoutSessao {
   total           Decimal   @db.Decimal(10, 2)
   previsaoChegada DateTime
   sumupCheckoutId String?   @unique
+  provedor        String    @default("SUMUP") // SUMUP | MERCADOPAGO (Checkout Pro)
+  cupomId         String?
+  valorDesconto   Decimal?  @db.Decimal(10, 2)
   status          String    @default("PENDENTE") // PENDENTE | PAGO | EXPIRADO | FALHOU
   pedidoId        String?   @unique
   expiresAt       DateTime

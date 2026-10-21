@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
 
 type Estado = "aguardando" | "confirmado" | "expirado" | "erro";
 
@@ -10,6 +11,10 @@ function ConfirmacaoConteudo() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const sessaoId     = searchParams.get("sessao") ?? "";
+  // Checkout Pro devolve status=approved|pending|rejected|null (null = cliente voltou sem pagar)
+  const statusMp     = searchParams.get("status");
+  const naoPago      = statusMp === "rejected" || statusMp === "null";
+  const { limparCarrinho } = useWebCarrinho();
 
   const [estado,      setEstado]      = useState<Estado>("aguardando");
   const [tentativas,  setTentativas]  = useState(0);
@@ -17,7 +22,7 @@ function ConfirmacaoConteudo() {
   const MAX_TENTATIVAS = 15; // 15 × 2s = 30s
 
   useEffect(function () {
-    if (!sessaoId) { setEstado("erro"); return; }
+    if (!sessaoId || naoPago) { setEstado("erro"); return; }
 
     async function verificar() {
       try {
@@ -28,6 +33,7 @@ function ConfirmacaoConteudo() {
 
         if (d.data?.pedidoId) {
           setEstado("confirmado");
+          limparCarrinho(); // Checkout Pro mantém o carrinho até o pagamento ser confirmado
           router.replace(`/web/pedido/${d.data.pedidoId}`);
           return true; // para o polling
         }
@@ -70,7 +76,7 @@ function ConfirmacaoConteudo() {
           <div>
             <h1 className="text-xl font-extrabold text-cb-marrom">Confirmando seu pedido</h1>
             <p className="text-cb-marrom/50 text-sm mt-2">
-              Pagamento recebido! Aguardando confirmação do SumUp...
+              Aguardando a confirmação do pagamento...
             </p>
             <p className="text-cb-marrom/30 text-xs mt-4">
               {Math.max(0, MAX_TENTATIVAS - tentativas) * 2}s restantes
@@ -126,7 +132,9 @@ function ConfirmacaoConteudo() {
           <div>
             <h1 className="text-xl font-extrabold text-cb-marrom">Algo deu errado</h1>
             <p className="text-cb-marrom/50 text-sm mt-2">
-              Não foi possível confirmar o pagamento. Verifique sua conta ou tente novamente.
+              {naoPago
+                ? "O pagamento não foi concluído. Seu carrinho continua salvo — tente novamente."
+                : "Não foi possível confirmar o pagamento. Verifique sua conta ou tente novamente."}
             </p>
           </div>
           <div className="flex gap-3">

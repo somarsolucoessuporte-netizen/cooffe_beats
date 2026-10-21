@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { supabaseAdmin } from "@/lib/supabase";
+import { criarPedidoDaSessao } from "@/lib/checkout-sessao";
 import { validarAssinaturaWebhook } from "@/lib/sumup-web";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
@@ -41,99 +41,8 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: true });
     }
 
-    // Busca sessão de checkout
-    const sessao = await prisma.checkoutSessao.findUnique({ where: { id: checkoutRef } });
-    if (!sessao || sessao.status === "PAGO") {
-      return Response.json({ ok: true }); // idempotência
-    }
-
-    // Cria pedido em transação
-    const pedido = await prisma.$transaction(async function (tx) {
-      const config = await tx.configuracao.findUnique({ where: { empresaId: EMPRESA_ID } });
-      if (!config) throw new Error("Configuração não encontrada");
-
-      const novaSenha = config.senhaAtual + 1;
-      await tx.configuracao.update({ where: { empresaId: EMPRESA_ID }, data: { senhaAtual: novaSenha } });
-      const senha = `${config.prefixoSenha}-${novaSenha}`;
-
-      const caixaAberto = await tx.caixa.findFirst({
-        where:  { empresaId: EMPRESA_ID, status: "ABERTO" },
-        select: { id: true },
-      });
-
-      type ItemSessao = {
-        produtoId: string; nome: string; preco: number; quantidade: number;
-        adicionais?: { adicionalId: string; preco: number }[];
-      };
-      const itens = sessao.itensJson as ItemSessao[];
-      const subtotal = Number(sessao.total);
-
-      const novoPedido = await tx.pedido.create({
-        data: {
-          empresaId:           EMPRESA_ID,
-          senha,
-          status:              "RECEBIDO",
-          origem:              "APP",
-          subtotal,
-          total:               subtotal,
-          clienteId:           sessao.clienteId,
-          caixaId:             caixaAberto?.id ?? null,
-          previsaoChegada:     sessao.previsaoChegada,
-          pago:                true,
-          pagamentoAntecipado: true,
-          itens: {
-            create: itens.map(function (item) {
-              return {
-                produtoId:  item.produtoId,
-                quantidade: item.quantidade,
-                precoUnit:  item.preco,
-                precoTotal: item.preco * item.quantidade,
-                adicionais: {
-                  create: (item.adicionais ?? []).map(function (a) {
-                    return { adicionalId: a.adicionalId, preco: a.preco };
-                  }),
-                },
-              };
-            }),
-          },
-        },
-        include: { itens: { include: { produto: true } } },
-      });
-
-      // Registra pagamento
-      await tx.pagamento.create({
-        data: {
-          pedidoId:  novoPedido.id,
-          metodo:    "PIX",
-          status:    "APROVADO",
-          valor:     subtotal,
-          referencia: sessao.id,
-          payload:   body as object,
-          paidAt:    new Date(),
-        },
-      });
-
-      // Marca sessão como PAGO
-      await tx.checkoutSessao.update({
-        where: { id: sessao.id },
-        data:  { status: "PAGO", pedidoId: novoPedido.id },
-      });
-
-      // Atualiza estatísticas do cliente
-      await tx.cliente.update({
-        where: { id: sessao.clienteId },
-        data:  { totalGasto: { increment: subtotal } },
-      }).catch(function () {});
-
-      return novoPedido;
-    });
-
-    // Broadcast para o KDS em tempo real
-    await supabaseAdmin.channel(`empresa-${EMPRESA_ID}`).send({
-      type:    "broadcast",
-      event:   "pedido:novo",
-      payload: { ...pedido, pagamentoAntecipado: true },
-    });
+    // Cria o pedido pago (idempotente: sessão já PAGO não gera outro pedido)
+    await criarPedidoDaSessao(checkoutRef, { metodo: "PIX", payload: body as object });
 
     return Response.json({ ok: true });
   } catch (err) {

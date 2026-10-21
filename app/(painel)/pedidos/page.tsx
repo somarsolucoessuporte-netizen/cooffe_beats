@@ -290,19 +290,23 @@ export default function Pedidos() {
                       <span className="font-mono font-bold text-cb-amber text-lg">{pedido.senha}</span>
                       <span className="text-xs text-zinc-500">{calcularTempoDecorrido(pedido.criadoEm)}</span>
                     </div>
-                    {/* Badges pedido online */}
-                    {pedido.origem === "APP" && (
-                      <div className="flex items-center gap-1.5">
+                    {/* Origem do pedido: online (APP/WHATSAPP) ou presencial (TOTEM/BALCAO) */}
+                    <div className="flex items-center gap-1.5">
+                      {pedido.origem === "APP" || pedido.origem === "WHATSAPP" ? (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
                           📱 Online
                         </span>
-                        {pedido.pago && (
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                            ✓ Pago
-                          </span>
-                        )}
-                      </div>
-                    )}
+                      ) : (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-cb-amber/20 text-cb-amber">
+                          🏪 Presencial
+                        </span>
+                      )}
+                      {pedido.origem === "APP" && pedido.pago && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+                          ✓ Pago
+                        </span>
+                      )}
+                    </div>
                     {pedido.pagamento?.confirmadoManualmente && (
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">

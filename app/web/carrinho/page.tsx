@@ -27,6 +27,7 @@ export default function WebCarrinho() {
 
   const [usuario,       setUsuario]       = useState<UsuarioWeb | null>(null);
   const [sumupAtivo,    setSumupAtivo]    = useState(false);
+  const [mpAtivo,       setMpAtivo]       = useState(false);
   const [tempoMedio,    setTempoMedio]    = useState(30);
 
   // Cupom
@@ -57,6 +58,7 @@ export default function WebCarrinho() {
       .then(function (d) {
         if (d.ok) {
           setSumupAtivo(d.data.sumupOnlineAtivo ?? false);
+          setMpAtivo(d.data.mpOnlineAtivo ?? false);
           var tm = d.data.tempoMedioMinutos ?? 30;
           setTempoMedio(tm);
           setPrevisao(agora(tm));
@@ -141,6 +143,34 @@ export default function WebCarrinho() {
     } catch { setErroCheckout("Erro de conexão. Tente novamente."); }
     finally { setFinalizando(false); }
   }
+
+  // Pagar online com Mercado Pago (Checkout Pro). Preços e cupom são recalculados no
+  // servidor; o carrinho só é limpo quando a confirmação chega (cliente pode voltar).
+  async function finalizarMercadoPago() {
+    if (!usuario?.clienteId) { setErroCheckout("Erro ao identificar sua conta. Recarregue a página."); return; }
+    setFinalizando(true); setErroCheckout("");
+    try {
+      var res = await fetch("/api/pagamentos/mp/checkout-pro", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itens: itens.map(function (i) {
+            return {
+              produtoId:  i.produtoId,
+              quantidade: i.quantidade,
+              adicionais: (i.adicionais ?? []).map(function (a) { return { adicionalId: a.adicionalId }; }),
+            };
+          }),
+          previsaoChegada: previsao.toISOString(),
+          cupomId:         cupomAtivo?.id ?? undefined,
+        }),
+      });
+      var data = await res.json();
+      if (!data.ok) { setErroCheckout(data.error ?? "Erro ao iniciar pagamento"); setFinalizando(false); return; }
+      window.location.href = data.data.checkoutUrl; // redireciona para o Mercado Pago
+    } catch { setErroCheckout("Erro de conexão. Tente novamente."); setFinalizando(false); }
+  }
+
+  var pagamentoOnline = mpAtivo || sumupAtivo;
 
   if (!hidratado) {
     return (
@@ -322,10 +352,10 @@ export default function WebCarrinho() {
             </div>
           )}
 
-          {/* Botão SumUp (pagar online) */}
-          {sumupAtivo && (
+          {/* Botão pagar online: Mercado Pago (Checkout Pro) ou SumUp */}
+          {pagamentoOnline && (
             <button
-              onClick={finalizarSumup}
+              onClick={mpAtivo ? finalizarMercadoPago : finalizarSumup}
               disabled={finalizando || !usuario?.clienteId}
               className="w-full bg-cb-amber text-white font-extrabold py-4 rounded-2xl
                          hover:bg-cb-amber/90 transition-colors disabled:opacity-60 text-base
@@ -348,16 +378,18 @@ export default function WebCarrinho() {
             onClick={finalizarNormal}
             disabled={finalizando || !usuario?.clienteId}
             className={`w-full font-extrabold py-4 rounded-2xl transition-colors disabled:opacity-60 text-base ${
-              sumupAtivo
+              pagamentoOnline
                 ? "border-2 border-cb-marrom text-cb-marrom hover:bg-cb-bege"
                 : "bg-cb-marrom text-cb-bege hover:bg-cb-marrom/90"
             }`}
           >
-            {finalizando ? "Enviando..." : `${sumupAtivo ? "Pagar no balcão" : "Finalizar Pedido"} • ${formatarMoeda(totalComDesconto)}`}
+            {finalizando ? "Enviando..." : `${pagamentoOnline ? "Pagar no balcão" : "Finalizar Pedido"} • ${formatarMoeda(totalComDesconto)}`}
           </button>
 
           <p className="text-cb-marrom/40 text-xs text-center">
-            {sumupAtivo ? "Pagamento online via SumUp ou presencial ao retirar" : "Pagamento presencial ao retirar no balcão"}
+            {pagamentoOnline
+              ? `Pagamento online via ${mpAtivo ? "Mercado Pago (cartão ou PIX)" : "SumUp"} ou presencial ao retirar`
+              : "Pagamento presencial ao retirar no balcão"}
           </p>
         </div>
       </div>

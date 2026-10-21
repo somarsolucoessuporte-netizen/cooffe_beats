@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { MercadoPagoConfig, Payment, Point } from "mercadopago";
+import { MercadoPagoConfig, Payment, Point, Preference } from "mercadopago";
 
 // Cliente criado sob demanda para não quebrar o build quando o token não existe
 function config(): MercadoPagoConfig {
@@ -104,23 +104,71 @@ export async function verificarPagamentoPoint(paymentIntentId: string): Promise<
   return { status: "PENDING", referencia, state };
 }
 
-/**
- * Status de um pagamento (tópico "payment" do webhook). Pagamentos gerados pela
- * Point carregam o external_reference da intenção — serve para achar o Pagamento
- * quando a notificação da intenção não chega (ex.: aviso de cobrança repetida na Point).
- */
-export async function consultarPagamentoMp(paymentId: string): Promise<{
+export type ResultadoPagamentoMp = {
   status:      "PENDING" | "PAID" | "FAILED";
   referencia?: string;
   paymentId:   string;
-}> {
-  const pagamento  = await new Payment(config()).get({ id: paymentId });
-  const referencia = pagamento.external_reference ?? undefined;
-  if (pagamento.status === "approved") return { status: "PAID", referencia, paymentId };
-  if (pagamento.status === "rejected" || pagamento.status === "cancelled") {
-    return { status: "FAILED", referencia, paymentId };
-  }
-  return { status: "PENDING", referencia, paymentId };
+  tipo?:       string; // payment_type_id: credit_card | debit_card | bank_transfer (PIX) ...
+};
+
+function resultadoPagamento(p: { id?: number | string; status?: string; external_reference?: string; payment_type_id?: string }): ResultadoPagamentoMp {
+  const base = { referencia: p.external_reference ?? undefined, paymentId: String(p.id), tipo: p.payment_type_id };
+  if (p.status === "approved") return { status: "PAID", ...base };
+  if (p.status === "rejected" || p.status === "cancelled") return { status: "FAILED", ...base };
+  return { status: "PENDING", ...base };
+}
+
+/**
+ * Status de um pagamento (tópico "payment" do webhook). Pagamentos da Point e do
+ * Checkout Pro carregam o external_reference — é a nossa referência (Pagamento.referencia
+ * ou id da CheckoutSessao).
+ */
+export async function consultarPagamentoMp(paymentId: string): Promise<ResultadoPagamentoMp> {
+  return resultadoPagamento(await new Payment(config()).get({ id: paymentId }));
+}
+
+/** Pagamento mais relevante de uma referência: aprovado, se houver; senão o mais recente. */
+export async function buscarPagamentoPorReferencia(referencia: string): Promise<ResultadoPagamentoMp | null> {
+  const res = await new Payment(config()).search({
+    options: { external_reference: referencia, sort: "date_created", criteria: "desc" },
+  });
+  const pagamentos = res.results ?? [];
+  const escolhido  = pagamentos.find((p) => p.status === "approved") ?? pagamentos[0];
+  return escolhido ? resultadoPagamento(escolhido) : null;
+}
+
+// ─── CHECKOUT PRO (pedido online) ────────────────────────────────────────────
+
+/** Cria a preferência do Checkout Pro — o cliente paga na página do Mercado Pago. */
+export async function criarPreferenciaCheckoutPro(params: {
+  referencia: string;
+  itens:      { id: string; titulo: string; quantidade: number; precoUnit: number }[];
+  urlRetorno: string;
+  urlWebhook: string;
+  expiraEm:   Date;
+}): Promise<{ id: string; checkoutUrl: string }> {
+  const res = await new Preference(config()).create({
+    body: {
+      items: params.itens.map((i) => ({
+        id:          i.id,
+        title:       i.titulo.slice(0, 250),
+        quantity:    i.quantidade,
+        unit_price:  Math.round(i.precoUnit * 100) / 100,
+        currency_id: "BRL",
+      })),
+      external_reference: params.referencia,
+      back_urls: { success: params.urlRetorno, pending: params.urlRetorno, failure: params.urlRetorno },
+      auto_return:          "approved",
+      notification_url:     params.urlWebhook,
+      statement_descriptor: "COFFEE BEATS",
+      expires:              true,
+      expiration_date_to:   params.expiraEm.toISOString(),
+    },
+    requestOptions: { idempotencyKey: params.referencia },
+  });
+
+  if (!res.id || !res.init_point) throw new Error("Mercado Pago: preferência não criada");
+  return { id: res.id, checkoutUrl: res.init_point };
 }
 
 /** Cancela a cobrança pendente na maquininha (só funciona enquanto a intenção está aberta). */

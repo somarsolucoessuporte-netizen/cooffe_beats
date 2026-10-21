@@ -74,6 +74,7 @@ export async function imprimirComanda(pedido: {
     whatsapp: string;
   };
   metodoPagamento?: string;
+  origem?: string; // Origem do Pedido: APP/WHATSAPP = online, TOTEM/BALCAO = presencial
 }) {
   try {
     if (typeof document === "undefined") return;
@@ -98,6 +99,14 @@ export async function imprimirComanda(pedido: {
         : "";
       return '<div class="item">' + item.quantidade + 'x ' + item.nome + adicionaisHtml + obsHtml + '</div>';
     }).join("");
+
+    var origemHtml = pedido.origem
+      ? '<div class="origem">' +
+        (pedido.origem === "APP" || pedido.origem === "WHATSAPP"
+          ? "*** PEDIDO ONLINE / ANTECIPADO ***"
+          : "*** PEDIDO PRESENCIAL ***") +
+        '</div>'
+      : "";
 
     var metodoPagHtml = "";
     if (pedido.via === "CLIENTE" && pedido.metodoPagamento) {
@@ -134,6 +143,7 @@ export async function imprimirComanda(pedido: {
       ".linha{display:flex;justify-content:space-between;margin:2px 0}" +
       ".bold{font-weight:bold;font-size:13px}" +
       ".footer{text-align:center;margin-top:10px;font-size:10px;color:#555}" +
+      ".origem{text-align:center;font-weight:bold;font-size:12px;margin:4px 0}" +
       ".msg{text-align:center;font-style:italic;margin:6px 0;font-size:10px}" +
       "</style></head><body>" +
       '<div class="header">' +
@@ -144,6 +154,7 @@ export async function imprimirComanda(pedido: {
       '<div class="sep"></div>' +
       '<div class="titulo">' + titulo + '</div>' +
       '<div class="senha">' + pedido.senha + '</div>' +
+      origemHtml +
       (pedido.cliente
         ? '<div class="sep"></div>' +
           '<div><b>Cliente:</b> ' + pedido.cliente.nome + '</div>' +

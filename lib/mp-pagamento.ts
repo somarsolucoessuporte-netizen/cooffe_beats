@@ -1,7 +1,8 @@
-import type { Prisma } from "@prisma/client";
+import type { MetodoPagamento, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { verificarPagamentoPoint } from "@/lib/mercadopago";
+import { verificarPagamentoPoint, type ResultadoPagamentoMp } from "@/lib/mercadopago";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
+import { criarPedidoDaSessao } from "@/lib/checkout-sessao";
 
 /** Dados do Mercado Pago gravados em Pagamento.payload na criação da cobrança. */
 export interface PayloadMp {
@@ -53,4 +54,29 @@ export async function reconciliarPagamentoMp(pagamento: { referencia: string | n
   await aplicarResultadoMp(pagamento.referencia, resultado, {
     provider: "mercadopago", deviceId: mp.deviceId, ...resultado, paymentIntentId: mp.paymentIntentId,
   });
+}
+
+/**
+ * Checkout Pro: se a referência é uma CheckoutSessao, cria o pedido pago quando
+ * aprovado e retorna true. Recusado não encerra a sessão — o cliente pode tentar
+ * outro cartão na própria página do Mercado Pago. Retorna false se não é sessão.
+ */
+export async function aplicarPagamentoCheckoutPro(resultado: ResultadoPagamentoMp, evento?: unknown): Promise<boolean> {
+  if (!resultado.referencia) return false;
+  const sessao = await prisma.checkoutSessao.findUnique({
+    where:  { id: resultado.referencia },
+    select: { id: true },
+  });
+  if (!sessao) return false;
+
+  if (resultado.status === "PAID") {
+    const metodo: MetodoPagamento =
+      resultado.tipo === "debit_card"  ? "CARTAO_DEBITO"  :
+      resultado.tipo === "credit_card" ? "CARTAO_CREDITO" : "PIX";
+    await criarPedidoDaSessao(sessao.id, {
+      metodo,
+      payload: { provider: "mercadopago", checkoutPro: true, ...resultado, evento: (evento ?? null) as Prisma.InputJsonValue },
+    });
+  }
+  return true;
 }

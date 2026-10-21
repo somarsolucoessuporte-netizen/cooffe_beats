@@ -287,6 +287,7 @@ export default function KDS() {
                         })),
                         total: 0,
                         via: "BARISTA",
+                        origem: pedido.origem,
                       })
                     }
                     className="px-3 py-3 rounded-xl border border-white/20 text-zinc-300

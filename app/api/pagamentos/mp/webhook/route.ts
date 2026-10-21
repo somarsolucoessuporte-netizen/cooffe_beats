@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { verificarPagamentoPoint, consultarPagamentoMp, validarAssinaturaWebhook } from "@/lib/mercadopago";
-import { aplicarResultadoMp } from "@/lib/mp-pagamento";
+import { aplicarResultadoMp, aplicarPagamentoCheckoutPro } from "@/lib/mp-pagamento";
 
 /**
  * POST /api/pagamentos/mp/webhook
- * Notificação de "Integrações Point" (intenção) ou "Pagamentos" do Mercado Pago.
+ * Notificação de "Integrações Point" (intenção) ou "Pagamentos" (Point e Checkout Pro) do Mercado Pago.
  * O payload só serve para achar o id — o status real é sempre reconsultado na API.
  */
 export async function POST(req: NextRequest) {
@@ -29,15 +29,16 @@ export async function POST(req: NextRequest) {
     const id = (body.data?.id ?? body.id ?? dataId) as string | number | undefined;
     if (!id) return Response.json({ ok: true });
 
-    // Tópico "payment": fallback quando a notificação da intenção não chega
-    // (ex.: Point mostrou aviso de cobrança repetida). Acha o Pagamento pelo
-    // external_reference, que é a nossa referência.
+    // Tópico "payment": Checkout Pro (pedido online — referência é a CheckoutSessao)
+    // ou fallback da Point quando a notificação da intenção não chega (ex.: aviso
+    // de cobrança repetida). Acha o registro pelo external_reference.
     if (topico === "payment") {
       const resultado = await consultarPagamentoMp(String(id));
       if (!resultado.referencia) {
         console.warn("[MP Webhook] payment sem external_reference:", id);
         return Response.json({ ok: true });
       }
+      if (await aplicarPagamentoCheckoutPro(resultado, body)) return Response.json({ ok: true });
       await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", ...resultado, evento: body });
       return Response.json({ ok: true });
     }

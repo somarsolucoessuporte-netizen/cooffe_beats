@@ -13,5 +13,7 @@ export async function GET() {
   return resposta({
     tempoMedioMinutos: config?.tempoMedioMinutos ?? 30,
     sumupOnlineAtivo:  config?.sumupOnlineAtivo  ?? false,
+    // Checkout Pro usa a mesma conta Mercado Pago da Point
+    mpOnlineAtivo:     Boolean(process.env.MP_ACCESS_TOKEN),
   });
 }
