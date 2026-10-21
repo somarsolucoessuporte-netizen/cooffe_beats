@@ -83,7 +83,7 @@ export async function criarPedidoDaSessao(sessaoId: string, pagamento: {
           }),
         },
       },
-      include: { itens: { include: { produto: true } } },
+      include: { itens: { include: { produto: true, adicionais: { include: { adicional: true } } } } },
     });
 
     await tx.pagamento.create({

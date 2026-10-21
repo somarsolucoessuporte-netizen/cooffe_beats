@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getWebSession } from "@/lib/web-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { criarPreferenciaCheckoutPro } from "@/lib/mercadopago";
+import { calcularCarrinhoWeb } from "@/lib/carrinho-web";
 import type { ItemSessao } from "@/lib/checkout-sessao";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
@@ -37,48 +38,13 @@ export async function POST(req: NextRequest) {
     if (!valid.success) return erroResposta("Dados inválidos");
     const { itens, previsaoChegada, cupomId } = valid.data;
 
-    const produtos = await prisma.produto.findMany({
-      where:   { id: { in: itens.map((i) => i.produtoId) }, empresaId: EMPRESA_ID, disponivel: true },
-      include: { adicionais: { include: { adicional: true } } },
-    });
+    const carrinho = await calcularCarrinhoWeb(EMPRESA_ID, itens, cupomId);
+    if ("erro" in carrinho) return erroResposta(carrinho.erro);
 
-    const itensSessao: ItemSessao[] = [];
-    for (const item of itens) {
-      const produto = produtos.find((p) => p.id === item.produtoId);
-      if (!produto) return erroResposta("Um dos produtos não está mais disponível. Atualize o carrinho.");
-
-      const adicionais = (item.adicionais ?? []).map(function (a) {
-        const vinculo = produto.adicionais.find((pa) => pa.adicionalId === a.adicionalId && pa.adicional.ativo);
-        return vinculo ? { adicionalId: a.adicionalId, preco: Number(vinculo.adicional.preco) } : null;
-      });
-      if (adicionais.some((a) => a === null)) return erroResposta(`Adicional indisponível em ${produto.nome}`);
-
-      const precoAdicionais = adicionais.reduce((s, a) => s + a!.preco, 0);
-      itensSessao.push({
-        produtoId:  produto.id,
-        nome:       produto.nome,
-        preco:      Number(produto.preco) + precoAdicionais,
-        quantidade: item.quantidade,
-        adicionais: adicionais as { adicionalId: string; preco: number }[],
-      });
-    }
-
-    const subtotal = itensSessao.reduce((s, i) => s + i.preco * i.quantidade, 0);
-
-    // Cupom: mesmas regras de /api/cupons/validar
-    let desconto = 0;
-    if (cupomId) {
-      const cupom = await prisma.cupom.findUnique({ where: { id: cupomId } });
-      const valido = cupom && cupom.ativo
-        && (!cupom.validoAte || new Date() <= cupom.validoAte)
-        && (cupom.usoMaximo === null || cupom.usoAtual < cupom.usoMaximo)
-        && (cupom.pedidoMinimo === null || subtotal >= cupom.pedidoMinimo);
-      if (!valido) return erroResposta("Cupom inválido ou expirado. Remova e tente novamente.");
-      desconto = cupom.tipo === "percentual" ? (subtotal * cupom.valor) / 100 : Math.min(cupom.valor, subtotal);
-      desconto = Math.round(desconto * 100) / 100;
-    }
-
-    const total = Math.round((subtotal - desconto) * 100) / 100;
+    const itensSessao: ItemSessao[] = carrinho.itens.map((i) => ({
+      produtoId: i.produtoId, nome: i.nome, preco: i.preco, quantidade: i.quantidade, adicionais: i.adicionais,
+    }));
+    const { desconto, total } = carrinho;
     if (total <= 0) return erroResposta("Total inválido para pagamento online");
 
     const expiraEm = new Date(Date.now() + 30 * 60 * 1000);

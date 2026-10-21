@@ -235,9 +235,9 @@ export default function KDS() {
                       <p className="font-bold text-zinc-100 text-lg">
                         {item.quantidade}x {item.produto.nome}
                       </p>
-                      {item.adicionais.length > 0 && (
+                      {(item.adicionais ?? []).length > 0 && (
                         <p className="text-sm text-zinc-400 mt-1">
-                          + {item.adicionais.map((a) => a.adicional.nome).join(", ")}
+                          + {(item.adicionais ?? []).map((a) => a.adicional.nome).join(", ")}
                         </p>
                       )}
                       {item.observacao && (
@@ -282,7 +282,7 @@ export default function KDS() {
                         itens: pedido.itens.map((item) => ({
                           nome: item.produto.nome,
                           quantidade: item.quantidade,
-                          adicionais: item.adicionais.map((a) => a.adicional.nome),
+                          adicionais: (item.adicionais ?? []).map((a) => a.adicional.nome),
                           observacao: item.observacao ?? undefined,
                         })),
                         total: 0,

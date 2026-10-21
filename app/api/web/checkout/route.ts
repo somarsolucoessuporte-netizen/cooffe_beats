@@ -4,20 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { getWebSession } from "@/lib/web-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { supabaseAdmin } from "@/lib/supabase";
+import { calcularCarrinhoWeb } from "@/lib/carrinho-web";
 
+// Preços e desconto vindos do navegador são ignorados — tudo é recalculado no servidor
 const ItemSchema = z.object({
   produtoId:  z.string(),
   quantidade: z.number().int().positive(),
-  precoUnit:  z.number().positive(),        // já inclui os adicionais
   observacao: z.string().optional(),
-  adicionais: z.array(z.object({ adicionalId: z.string(), preco: z.number() })).optional(),
+  adicionais: z.array(z.object({ adicionalId: z.string() })).optional(),
 });
 
 const CheckoutSchema = z.object({
-  itens:         z.array(ItemSchema).min(1),
-  cupomId:       z.string().optional(),
-  valorDesconto: z.number().optional(),
-  observacao:    z.string().optional(),
+  itens:      z.array(ItemSchema).min(1),
+  cupomId:    z.string().optional(),
+  observacao: z.string().optional(),
 });
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
@@ -31,7 +31,10 @@ export async function POST(req: NextRequest) {
     const valid = CheckoutSchema.safeParse(body);
     if (!valid.success) return erroResposta(valid.error.message);
 
-    const { itens, cupomId, valorDesconto, observacao } = valid.data;
+    const { itens, cupomId, observacao } = valid.data;
+
+    const carrinho = await calcularCarrinhoWeb(EMPRESA_ID, itens, cupomId);
+    if ("erro" in carrinho) return erroResposta(carrinho.erro);
 
     const pedido = await prisma.$transaction(async function (tx) {
       const config = await tx.configuracao.findUnique({ where: { empresaId: EMPRESA_ID } });
@@ -46,14 +49,8 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
 
-      const subtotal = itens.reduce(function (acc, item) {
-        return acc + item.precoUnit * item.quantidade;
-      }, 0);
-      const desconto = valorDesconto ?? 0;
-      const total    = Math.max(0, subtotal - desconto);
-
-      if (cupomId) {
-        await tx.cupom.update({ where: { id: cupomId }, data: { usoAtual: { increment: 1 } } });
+      if (carrinho.cupomId) {
+        await tx.cupom.updateMany({ where: { id: carrinho.cupomId }, data: { usoAtual: { increment: 1 } } });
       }
 
       return tx.pedido.create({
@@ -62,20 +59,20 @@ export async function POST(req: NextRequest) {
           senha,
           status:        "RECEBIDO",
           origem:        "APP",
-          subtotal,
-          total,
+          subtotal:      carrinho.subtotal,
+          total:         carrinho.total,
           observacao:    observacao ?? null,
           caixaId:       caixaAberto?.id ?? null,
           clienteId:     cliente.id,
-          cupomId:       cupomId      ?? null,
-          valorDesconto: desconto > 0 ? desconto : null,
+          cupomId:       carrinho.cupomId,
+          valorDesconto: carrinho.desconto > 0 ? carrinho.desconto : null,
           itens: {
-            create: itens.map(function (item) {
+            create: carrinho.itens.map(function (item) {
               return {
                 produtoId:  item.produtoId,
                 quantidade: item.quantidade,
-                precoUnit:  item.precoUnit,
-                precoTotal: item.precoUnit * item.quantidade,
+                precoUnit:  item.preco,
+                precoTotal: item.preco * item.quantidade,
                 observacao: item.observacao ?? null,
                 adicionais: {
                   create: (item.adicionais ?? []).map(function (a) {
@@ -87,7 +84,7 @@ export async function POST(req: NextRequest) {
           },
         },
         include: {
-          itens: { include: { produto: true } },
+          itens: { include: { produto: true, adicionais: { include: { adicional: true } } } },
         },
       });
     });

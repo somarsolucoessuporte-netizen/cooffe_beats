@@ -96,12 +96,10 @@ export default function WebCarrinho() {
             return {
               produtoId:  i.produtoId,
               quantidade: i.quantidade,
-              precoUnit:  i.preco,
-              adicionais: (i.adicionais ?? []).map(function (a) { return { adicionalId: a.adicionalId, preco: a.preco }; }),
+              adicionais: (i.adicionais ?? []).map(function (a) { return { adicionalId: a.adicionalId }; }),
             };
           }),
-          cupomId:       cupomAtivo?.id       ?? undefined,
-          valorDesconto: cupomAtivo?.desconto ?? undefined,
+          cupomId: cupomAtivo?.id ?? undefined, // preços e desconto são recalculados no servidor
         }),
       });
       var data = await res.json();
