@@ -15,6 +15,7 @@ export interface DadosCupom {
   nomeCliente?: string;
   metodoPagamento?: string;
   via: 'CLIENTE' | 'COZINHA' | 'BARISTA';
+  origem?: string; // Origem do Pedido: APP/WHATSAPP = online, demais = presencial
 }
 
 export const printCupom = async (
@@ -24,7 +25,8 @@ export const printCupom = async (
     const response = await fetch('http://localhost:9100/print', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cupom),
+      // Sem origem informada = chamada do totem, portanto presencial
+      body: JSON.stringify({ origem: 'TOTEM', ...cupom }),
       signal: AbortSignal.timeout(5000),
     });
     const result = await response.json();

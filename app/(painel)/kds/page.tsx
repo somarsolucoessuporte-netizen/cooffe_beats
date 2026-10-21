@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { calcularTempoDecorrido } from "@/lib/utils";
 import { imprimirComanda } from "@/lib/imprimir-comanda";
+import { printCupom } from "@/lib/sunmi-print";
 
 interface ItemAdicional {
   adicional: { nome: string };
@@ -64,6 +65,31 @@ export default function KDS() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [tick, setTick] = useState(0);
   const [caixaFechado, setCaixaFechado] = useState<boolean | null>(null);
+  const [falhaImpressao, setFalhaImpressao] = useState<string | null>(null);
+  const impressosRef = useRef<Set<string>>(new Set());
+
+  // Impressão automática de pedido online pago (MP/SumUp aprovado → pedido:novo com pagamentoAntecipado).
+  // O webhook roda na Vercel e não alcança o localhost:9100 do Sunmi: quem imprime é este KDS,
+  // pelo print server local. Em aparelho sem print server a chamada só falha e avisa na tela.
+  const imprimirAutomatico = useCallback(async (pedido: Pedido) => {
+    if (impressosRef.current.has(pedido.id)) return;
+    impressosRef.current.add(pedido.id);
+    const resultado = await printCupom({
+      numeroPedido: pedido.senha,
+      itens: pedido.itens.map((item) => {
+        const adds = (item.adicionais ?? []).map((a) => a.adicional.nome);
+        return {
+          nome:       adds.length > 0 ? `${item.produto.nome} + ${adds.join(", ")}` : item.produto.nome,
+          quantidade: item.quantidade,
+          observacao: item.observacao ?? undefined,
+        };
+      }),
+      total: 0,
+      via: "COZINHA",
+      origem: pedido.origem,
+    });
+    if (!resultado.success) setFalhaImpressao(pedido.senha);
+  }, []);
 
   useEffect(() => {
     fetch("/api/caixa/status")
@@ -104,6 +130,9 @@ export default function KDS() {
       .on("broadcast", { event: "pedido:novo" }, ({ payload }) => {
         const novo = payload as Pedido;
         if (!["RECEBIDO", "EM_PREPARO"].includes(novo.status)) return;
+        if (novo.pagamentoAntecipado && (novo.origem === "APP" || novo.origem === "WHATSAPP")) {
+          imprimirAutomatico(novo);
+        }
         setPedidos((prev) => (prev.some((p) => p.id === novo.id) ? prev.map((p) => (p.id === novo.id ? novo : p)) : [novo, ...prev]));
       })
       .on("broadcast", { event: "pedido:atualizado" }, ({ payload }) => {
@@ -123,7 +152,7 @@ export default function KDS() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [empresaId]);
+  }, [empresaId, imprimirAutomatico]);
 
   const atualizarStatus = useCallback(async (pedidoId: string, status: string) => {
     await fetch(`/api/pedidos/${pedidoId}/status`, {
@@ -144,6 +173,16 @@ export default function KDS() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {falhaImpressao && (
+            <button
+              onClick={() => setFalhaImpressao(null)}
+              className="flex items-center gap-2 bg-red-500/20 border border-red-400/40
+                         text-red-300 text-sm font-medium px-4 py-2 rounded-xl hover:bg-red-500/30 transition-all"
+              title="Fechar aviso"
+            >
+              🖨️ Impressão automática falhou ({falhaImpressao}) — use o botão 🖨️ ✕
+            </button>
+          )}
           {caixaFechado && (
             <a
               href="/caixa"
