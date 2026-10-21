@@ -6,10 +6,22 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase-web";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
+// Destino pós-login gravado pela página /web/login antes do OAuth (cookie, para não depender
+// de query string no redirectTo — o Supabase só aceita URLs da allowlist)
+const COOKIE_REDIRECT = "cb_login_redirect";
+
+// Aceita só caminhos internos do portal web (evita open redirect: "//host", "https://...")
+function destinoSeguro(valor: string | null | undefined): string {
+  if (!valor) return "/web/cardapio";
+  var v = valor;
+  try { v = decodeURIComponent(valor); } catch { return "/web/cardapio"; }
+  if (!v.startsWith("/web") || v.startsWith("//") || v.includes("\\")) return "/web/cardapio";
+  return v;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code  = searchParams.get("code");
-  const next  = searchParams.get("next") ?? "/web/cardapio";
   const error = searchParams.get("error");
 
   if (error) {
@@ -21,6 +33,8 @@ export async function GET(request: NextRequest) {
   }
 
   const cookieStore = await cookies();
+  const next = destinoSeguro(searchParams.get("next") ?? cookieStore.get(COOKIE_REDIRECT)?.value);
+  cookieStore.delete(COOKIE_REDIRECT);
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {

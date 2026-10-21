@@ -110,7 +110,10 @@ type Aba = "entrar" | "cadastrar";
 function LoginConteudo() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const redirect     = searchParams.get("redirect") ?? "/web/cardapio";
+  const redirectParam = searchParams.get("redirect");
+  // Só caminhos internos do portal (evita open redirect)
+  const redirect     = redirectParam && redirectParam.startsWith("/web") && !redirectParam.startsWith("//")
+    ? redirectParam : "/web/cardapio";
 
   const [aba,          setAba]          = useState<Aba>("entrar");
   const [email,        setEmail]        = useState("");
@@ -195,6 +198,8 @@ function LoginConteudo() {
     limpar();
     setCarregando(true);
     try {
+      // Guarda o destino (?redirect=) para o callback devolver o cliente onde ele estava
+      document.cookie = "cb_login_redirect=" + encodeURIComponent(redirect) + "; path=/; max-age=600; samesite=lax";
       var sb = createSupabaseWebClient();
       var { error } = await sb.auth.signInWithOAuth({
         provider: "google",

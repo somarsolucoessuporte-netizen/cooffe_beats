@@ -29,6 +29,8 @@ export async function POST(req: NextRequest) {
   try {
     const { user, cliente } = await getWebSession();
     if (!user || !cliente) return erroResposta("Não autenticado", 401);
+    // Contas Google chegam sem telefone: o carrinho abre o modal de WhatsApp ao receber 422
+    if (!cliente.whatsapp) return erroResposta("Informe seu WhatsApp para continuar.", 422);
 
     const body  = await req.json();
     const valid = Schema.safeParse(body);

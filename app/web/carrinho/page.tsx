@@ -6,7 +6,14 @@ import Link from "next/link";
 import { useWebCarrinho, chaveItem } from "@/contexts/WebCarrinhoContext";
 import { formatarMoeda } from "@/lib/utils";
 
-interface UsuarioWeb { clienteId: string | null; nome: string }
+interface UsuarioWeb { clienteId: string | null; nome: string; whatsapp: string | null }
+
+function formatarWhatsApp(valor: string): string {
+  var nums = valor.replace(/\D/g, "").slice(0, 11);
+  if (nums.length <= 2)  return nums.length ? "(" + nums : "";
+  if (nums.length <= 7)  return "(" + nums.slice(0, 2) + ") " + nums.slice(2);
+  return "(" + nums.slice(0, 2) + ") " + nums.slice(2, 7) + "-" + nums.slice(7);
+}
 
 function agora(offsetMin = 0): Date {
   return new Date(Date.now() + offsetMin * 60 * 1000);
@@ -44,13 +51,20 @@ export default function WebCarrinho() {
   const [finalizando,   setFinalizando]   = useState(false);
   const [erroCheckout,  setErroCheckout]  = useState("");
 
+  // WhatsApp obrigatório antes do pedido (contas Google chegam sem telefone)
+  const [pedindoWpp,    setPedindoWpp]    = useState(false);
+  const [wpp,           setWpp]           = useState("");
+  const [salvandoWpp,   setSalvandoWpp]   = useState(false);
+  const [erroWpp,       setErroWpp]       = useState("");
+  const [acaoPendente,  setAcaoPendente]  = useState<(() => void) | null>(null);
+
   var totalComDesconto = cupomAtivo ? Math.max(0, totalValor - cupomAtivo.desconto) : totalValor;
 
   // Carrega dados do usuário e configurações
   useEffect(function () {
     fetch("/api/web/me")
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (d.ok) setUsuario({ clienteId: d.data.clienteId, nome: d.data.nome }); })
+      .then(function (d) { if (d.ok) setUsuario({ clienteId: d.data.clienteId, nome: d.data.nome, whatsapp: d.data.whatsapp }); })
       .catch(function () {});
 
     fetch("/api/web/config")
@@ -82,6 +96,47 @@ export default function WebCarrinho() {
     finally { setAplicando(false); }
   }, [cupomCodigo, totalValor]);
 
+  // Executa a finalização só se o cliente já tem WhatsApp; senão abre o modal e guarda a ação
+  function comWhatsApp(acao: () => void) {
+    if (usuario && !usuario.whatsapp) {
+      setAcaoPendente(function () { return acao; });
+      setErroWpp("");
+      setPedindoWpp(true);
+      return;
+    }
+    acao();
+  }
+
+  async function salvarWhatsApp() {
+    var nums = wpp.replace(/\D/g, "");
+    if (nums.length < 10) { setErroWpp("Informe o WhatsApp com DDD."); return; }
+    setSalvandoWpp(true); setErroWpp("");
+    try {
+      var r = await fetch("/api/web/usuario/telefone", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telefone: nums }),
+      });
+      var d = await r.json();
+      if (!d.ok) { setErroWpp(d.error ?? "Erro ao salvar WhatsApp"); return; }
+      setUsuario(function (u) { return u ? { ...u, whatsapp: d.data.whatsapp } : u; });
+      setPedindoWpp(false);
+      var acao = acaoPendente;
+      setAcaoPendente(null);
+      if (acao) acao();
+    } catch { setErroWpp("Erro de conexão. Tente novamente."); }
+    finally { setSalvandoWpp(false); }
+  }
+
+  // Servidor recusou por falta de WhatsApp (422): reabre o modal para a mesma ação
+  function faltouWhatsApp(res: Response, acao: () => void): boolean {
+    if (res.status !== 422) return false;
+    setUsuario(function (u) { return u ? { ...u, whatsapp: null } : u; });
+    setAcaoPendente(function () { return acao; });
+    setErroWpp("");
+    setPedindoWpp(true);
+    return true;
+  }
+
   function removerCupom() { setCupomAtivo(null); setCupomCodigo(""); setErroCupom(""); }
 
   // Pagar no balcão (sem SumUp)
@@ -102,6 +157,7 @@ export default function WebCarrinho() {
           cupomId: cupomAtivo?.id ?? undefined, // preços e desconto são recalculados no servidor
         }),
       });
+      if (faltouWhatsApp(res, finalizarNormal)) return;
       var data = await res.json();
       if (!data.ok) { setErroCheckout(data.error ?? "Erro ao finalizar pedido"); return; }
       limparCarrinho();
@@ -134,6 +190,7 @@ export default function WebCarrinho() {
           valorDesconto:   cupomAtivo?.desconto ?? undefined,
         }),
       });
+      if (faltouWhatsApp(res, finalizarSumup)) return;
       var data = await res.json();
       if (!data.ok) { setErroCheckout(data.error ?? "Erro ao iniciar pagamento"); return; }
       limparCarrinho();
@@ -162,6 +219,7 @@ export default function WebCarrinho() {
           cupomId:         cupomAtivo?.id ?? undefined,
         }),
       });
+      if (faltouWhatsApp(res, finalizarMercadoPago)) { setFinalizando(false); return; }
       var data = await res.json();
       if (!data.ok) { setErroCheckout(data.error ?? "Erro ao iniciar pagamento"); setFinalizando(false); return; }
       window.location.href = data.data.checkoutUrl; // redireciona para o Mercado Pago
@@ -353,7 +411,7 @@ export default function WebCarrinho() {
           {/* Botão pagar online: Mercado Pago (Checkout Pro) ou SumUp */}
           {pagamentoOnline && (
             <button
-              onClick={mpAtivo ? finalizarMercadoPago : finalizarSumup}
+              onClick={function () { comWhatsApp(mpAtivo ? finalizarMercadoPago : finalizarSumup); }}
               disabled={finalizando || !usuario?.clienteId}
               className="w-full bg-cb-amber text-white font-extrabold py-4 rounded-2xl
                          hover:bg-cb-amber/90 transition-colors disabled:opacity-60 text-base
@@ -373,7 +431,7 @@ export default function WebCarrinho() {
 
           {/* Botão pagar no balcão */}
           <button
-            onClick={finalizarNormal}
+            onClick={function () { comWhatsApp(finalizarNormal); }}
             disabled={finalizando || !usuario?.clienteId}
             className={`w-full font-extrabold py-4 rounded-2xl transition-colors disabled:opacity-60 text-base ${
               pagamentoOnline
@@ -391,6 +449,47 @@ export default function WebCarrinho() {
           </p>
         </div>
       </div>
+
+      {/* Modal: WhatsApp obrigatório para o primeiro pedido */}
+      {pedindoWpp && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4">
+            <div>
+              <h2 className="font-extrabold text-lg text-cb-marrom">Informe seu WhatsApp</h2>
+              <p className="text-sm text-cb-marrom/60 mt-1">
+                Usamos para enviar atualizações do seu pedido.
+              </p>
+            </div>
+            <input
+              type="tel"
+              inputMode="numeric"
+              autoFocus
+              placeholder="(85) 99999-9999"
+              value={wpp}
+              onChange={function (e) { setWpp(formatarWhatsApp(e.target.value)); }}
+              onKeyDown={function (e) { if (e.key === "Enter") salvarWhatsApp(); }}
+              className="w-full border border-cb-marrom/20 rounded-xl px-4 py-3 text-base text-cb-marrom
+                         bg-white focus:outline-none focus:border-cb-amber transition-colors"
+            />
+            {erroWpp && <p className="text-red-600 text-sm">{erroWpp}</p>}
+            <button
+              onClick={salvarWhatsApp}
+              disabled={salvandoWpp}
+              className="w-full bg-cb-marrom text-cb-bege font-extrabold py-3.5 rounded-2xl
+                         hover:bg-cb-marrom/90 transition-colors disabled:opacity-60"
+            >
+              {salvandoWpp ? "Salvando..." : "Salvar e continuar"}
+            </button>
+            <button
+              onClick={function () { setPedindoWpp(false); setAcaoPendente(null); }}
+              disabled={salvandoWpp}
+              className="text-cb-marrom/50 text-sm font-semibold"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
