@@ -1,12 +1,11 @@
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verificarPagamentoPoint, validarAssinaturaWebhook } from "@/lib/mercadopago";
-import { liberarPedidoPago } from "@/lib/liberar-pedido";
+import { verificarPagamentoPoint, consultarPagamentoMp, validarAssinaturaWebhook } from "@/lib/mercadopago";
+import { aplicarResultadoMp } from "@/lib/mp-pagamento";
 
 /**
  * POST /api/pagamentos/mp/webhook
- * Notificação de "Integrações Point" do Mercado Pago. O payload só serve para
- * achar o id da intenção — o status real é sempre reconsultado na API.
+ * Notificação de "Integrações Point" (intenção) ou "Pagamentos" do Mercado Pago.
+ * O payload só serve para achar o id — o status real é sempre reconsultado na API.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -23,46 +22,34 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: false }, { status: 401 });
     }
 
-    // Notificações de outros tópicos (payment, merchant_order) não são intenções Point
     const topico = (body.type ?? body.topic ?? req.nextUrl.searchParams.get("type") ?? req.nextUrl.searchParams.get("topic")) as string | undefined;
-    if (topico === "payment" || topico === "merchant_order") return Response.json({ ok: true });
+    if (topico === "merchant_order") return Response.json({ ok: true });
 
     // Formatos aceitos: { id, state, ... } (Point) ou { data: { id } } (padrão)
-    const intentId = (body.data?.id ?? body.id ?? dataId) as string | undefined;
-    if (!intentId) return Response.json({ ok: true });
+    const id = (body.data?.id ?? body.id ?? dataId) as string | number | undefined;
+    if (!id) return Response.json({ ok: true });
 
-    const resultado = await verificarPagamentoPoint(String(intentId));
-    const referencia = resultado.referencia;
-
-    if (resultado.status === "PAID" && referencia) {
-      const result = await prisma.pagamento.updateMany({
-        where: { referencia, status: { not: "APROVADO" } },
-        data:  {
-          status:  "APROVADO",
-          paidAt:  new Date(),
-          payload: { provider: "mercadopago", paymentIntentId: intentId, ...resultado, evento: body },
-        },
-      });
-
-      if (result.count > 0) {
-        // Pedido do totem nasce AGUARDANDO_PAGAMENTO; aprovado, vai para RECEBIDO e entra no KDS.
-        const pagamento = await prisma.pagamento.findFirst({
-          where:  { referencia },
-          select: { pedidoId: true },
-        });
-        if (pagamento?.pedidoId) await liberarPedidoPago(pagamento.pedidoId);
+    // Tópico "payment": fallback quando a notificação da intenção não chega
+    // (ex.: Point mostrou aviso de cobrança repetida). Acha o Pagamento pelo
+    // external_reference, que é a nossa referência.
+    if (topico === "payment") {
+      const resultado = await consultarPagamentoMp(String(id));
+      if (!resultado.referencia) {
+        console.warn("[MP Webhook] payment sem external_reference:", id);
+        return Response.json({ ok: true });
       }
-    } else if (resultado.status === "FAILED" && referencia) {
-      // Recusado/cancelado/erro na Point: o polling do totem vê RECUSADO e volta à escolha.
-      // Só mexe em pendentes — cancelamento feito pelo totem já gravou CANCELADO.
-      await prisma.pagamento.updateMany({
-        where: { referencia, status: "PENDENTE" },
-        data:  {
-          status:  "RECUSADO",
-          payload: { provider: "mercadopago", paymentIntentId: intentId, ...resultado, evento: body },
-        },
-      });
+      await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", ...resultado, evento: body });
+      return Response.json({ ok: true });
     }
+
+    const resultado = await verificarPagamentoPoint(String(id));
+    if (!resultado.referencia) {
+      console.warn("[MP Webhook] intenção sem external_reference:", id);
+      return Response.json({ ok: true });
+    }
+    await aplicarResultadoMp(resultado.referencia, resultado, {
+      provider: "mercadopago", paymentIntentId: String(id), ...resultado, evento: body,
+    });
 
     return Response.json({ ok: true });
   } catch (err) {

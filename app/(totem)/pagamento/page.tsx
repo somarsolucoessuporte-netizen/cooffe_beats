@@ -484,13 +484,18 @@ export default function Pagamento() {
           {cancelando ? "Cancelando..." : "Cancelar pagamento"}
         </button>
 
-        <button
-          onClick={function() { playClick(); setModalManual(true); }}
-          className="fixed bottom-5 right-5 z-40 bg-cb-confirma text-white text-sm font-semibold
-                     py-2.5 px-4 rounded-xl shadow-md touch-manipulation opacity-90 active:scale-95"
-        >
-          ✓ Confirmar pagamento recebido
-        </button>
+        <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-1 max-w-[260px]">
+          <button
+            onClick={function() { playClick(); setModalManual(true); }}
+            className="bg-cb-confirma text-white text-sm font-semibold
+                       py-2.5 px-4 rounded-xl shadow-md touch-manipulation opacity-90 active:scale-95"
+          >
+            ✓ Já paguei na maquininha — confirmar pedido
+          </button>
+          <p className="text-xs text-cb-marrom/60 text-right">
+            Use somente se a maquininha mostrou &quot;Aprovado&quot; mas o totem não atualizou.
+          </p>
+        </div>
 
         {modalManual && (
           <ModalConfirmacaoManual

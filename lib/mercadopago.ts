@@ -104,6 +104,25 @@ export async function verificarPagamentoPoint(paymentIntentId: string): Promise<
   return { status: "PENDING", referencia, state };
 }
 
+/**
+ * Status de um pagamento (tópico "payment" do webhook). Pagamentos gerados pela
+ * Point carregam o external_reference da intenção — serve para achar o Pagamento
+ * quando a notificação da intenção não chega (ex.: aviso de cobrança repetida na Point).
+ */
+export async function consultarPagamentoMp(paymentId: string): Promise<{
+  status:      "PENDING" | "PAID" | "FAILED";
+  referencia?: string;
+  paymentId:   string;
+}> {
+  const pagamento  = await new Payment(config()).get({ id: paymentId });
+  const referencia = pagamento.external_reference ?? undefined;
+  if (pagamento.status === "approved") return { status: "PAID", referencia, paymentId };
+  if (pagamento.status === "rejected" || pagamento.status === "cancelled") {
+    return { status: "FAILED", referencia, paymentId };
+  }
+  return { status: "PENDING", referencia, paymentId };
+}
+
 /** Cancela a cobrança pendente na maquininha (só funciona enquanto a intenção está aberta). */
 export async function cancelarPagamentoPoint(deviceId: string, paymentIntentId: string) {
   return new Point(config()).cancelPaymentIntent({ device_id: deviceId, payment_intent_id: paymentIntentId });
