@@ -469,32 +469,35 @@ export default function Pagamento() {
     setCancelando(false);
   }
 
-  // Rodapé comum às telas de aguardo: cancelar (esquerda) + confirmação manual
-  // do atendente (canto inferior direito, discreta, com confirmação dupla)
+  // Rodapé comum às telas de aguardo: confirmação manual do atendente (com confirmação dupla)
+  // acima do cancelar, empilhados no fluxo normal da página (sem fixed/absolute)
   // Chamado como função (não <Componente />) para o modal não remontar a cada tick do timer
   function acoesAguardo() {
     return (
       <>
-        <button
-          onClick={voltarEscolha}
-          disabled={cancelando}
-          className="border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-8
-                     rounded-2xl touch-manipulation btn-totem disabled:opacity-60"
-        >
-          {cancelando ? "Cancelando..." : "Cancelar pagamento"}
-        </button>
+        <div className="flex flex-col gap-3 w-full max-w-md shrink-0">
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={function() { playClick(); setModalManual(true); }}
+              disabled={cancelando}
+              className="w-full bg-cb-confirma text-white font-bold text-base py-3 px-6
+                         rounded-2xl touch-manipulation btn-totem disabled:opacity-60"
+            >
+              ✓ Já paguei na maquininha — confirmar pedido
+            </button>
+            <p className="text-xs text-cb-marrom/60 text-center">
+              Use somente se a maquininha mostrou &quot;Aprovado&quot; mas o totem não atualizou.
+            </p>
+          </div>
 
-        <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-1 max-w-[260px]">
           <button
-            onClick={function() { playClick(); setModalManual(true); }}
-            className="bg-cb-confirma text-white text-sm font-semibold
-                       py-2.5 px-4 rounded-xl shadow-md touch-manipulation opacity-90 active:scale-95"
+            onClick={voltarEscolha}
+            disabled={cancelando}
+            className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-6
+                       rounded-2xl touch-manipulation btn-totem disabled:opacity-60"
           >
-            ✓ Já paguei na maquininha — confirmar pedido
+            {cancelando ? "Cancelando..." : "Cancelar pagamento"}
           </button>
-          <p className="text-xs text-cb-marrom/60 text-right">
-            Use somente se a maquininha mostrou &quot;Aprovado&quot; mas o totem não atualizou.
-          </p>
         </div>
 
         {modalManual && (
@@ -512,7 +515,7 @@ export default function Pagamento() {
     return (
       <div className="h-full flex flex-col animate-fadeIn">
         <HeaderTotem />
-        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-[safe_center] px-8 py-5 gap-4">
           <h1 className="font-sans font-extrabold text-3xl text-cb-marrom">
             Pagamento na Maquininha
           </h1>
@@ -520,7 +523,7 @@ export default function Pagamento() {
             Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
           </p>
 
-          <div className="flex flex-col items-center gap-6 bg-white rounded-3xl p-10 shadow-sm">
+          <div className="flex flex-col items-center gap-4 bg-white rounded-3xl p-8 shadow-sm">
             {/* Ícone animado */}
             <div className="relative w-28 h-28 flex items-center justify-center">
               <span className="text-7xl">🖥️</span>
@@ -566,7 +569,7 @@ export default function Pagamento() {
     return (
       <div className="h-full flex flex-col animate-fadeIn">
         <HeaderTotem />
-        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-[safe_center] px-8 py-5 gap-4">
           <h1 className="font-sans font-extrabold text-3xl text-cb-marrom">Pagamento via PIX</h1>
           <p className="text-cb-marrom/60 text-lg">
             Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
@@ -659,7 +662,7 @@ export default function Pagamento() {
     return (
       <div className="h-full flex flex-col animate-fadeIn">
         <HeaderTotem />
-        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-[safe_center] px-8 py-5 gap-4">
           <h1 className="font-sans font-extrabold text-3xl text-cb-marrom">Pagamento com Cartão</h1>
           <p className="text-cb-marrom/60 text-lg">
             Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
