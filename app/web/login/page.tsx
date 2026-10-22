@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { motion, useAnimationControls } from "framer-motion";
 import { createSupabaseWebClient } from "@/lib/supabase-web";
 
 function formatarWhatsApp(valor: string): string {
@@ -70,14 +71,37 @@ function CampoSenha({
   );
 }
 
-function CheckboxTermos({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function CheckboxTermos({
+  checked, onChange, alerta, shakeKey,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  alerta: boolean;
+  shakeKey: number;
+}) {
+  const controles = useAnimationControls();
+
+  // Chacoalha a cada nova tentativa sem aceitar os termos
+  useEffect(function () {
+    if (shakeKey > 0) controles.start({ x: [0, -6, 6, -6, 6, 0], transition: { duration: 0.4 } });
+  }, [shakeKey, controles]);
+
   return (
-    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+    <motion.div animate={controles} className="flex flex-col gap-1">
+    <label
+      className={
+        "flex items-start gap-2.5 cursor-pointer select-none rounded-lg p-2 border transition-colors " +
+        (alerta ? "border-red-400 bg-red-50/60" : "border-transparent")
+      }
+    >
       <input
         type="checkbox"
         checked={checked}
         onChange={function (e) { onChange(e.target.checked); }}
-        className="mt-0.5 w-4 h-4 rounded border-cb-marrom/30 accent-cb-marrom shrink-0 cursor-pointer"
+        className={
+          "mt-0.5 w-4 h-4 rounded accent-cb-marrom shrink-0 cursor-pointer " +
+          (alerta ? "outline outline-2 outline-red-500" : "border-cb-marrom/30")
+        }
       />
       <span className="text-xs text-cb-marrom/60 leading-relaxed">
         Li e concordo com os{" "}
@@ -102,6 +126,12 @@ function CheckboxTermos({ checked, onChange }: { checked: boolean; onChange: (v:
         </Link>
       </span>
     </label>
+    {alerta && (
+      <span className="text-red-600 px-2" style={{ fontSize: 12 }}>
+        Aceite os Termos de Uso para continuar
+      </span>
+    )}
+    </motion.div>
   );
 }
 
@@ -138,6 +168,8 @@ function LoginConteudo() {
   const [erro,         setErro]         = useState("");
   const [aviso,        setAviso]        = useState("");
   const [jaCadastrado, setJaCadastrado] = useState(false);
+  const [alertaTermos, setAlertaTermos] = useState(false);
+  const [shakeTermos,  setShakeTermos]  = useState(0);
 
   useEffect(function () {
     var sb = createSupabaseWebClient();
@@ -147,6 +179,24 @@ function LoginConteudo() {
   }, [router, redirect]);
 
   function limpar() { setErro(""); setAviso(""); setJaCadastrado(false); }
+
+  // Valida o aceite dos termos ao clicar; se faltar, destaca e chacoalha o checkbox
+  function termosOk(): boolean {
+    if (aceitou) return true;
+    setAlertaTermos(true);
+    setShakeTermos(function (n) { return n + 1; });
+    return false;
+  }
+
+  // Roda antes da validação nativa dos campos (required), para o aviso dos termos aparecer primeiro
+  function validarTermosNoClique(e: React.MouseEvent) {
+    if (!aceitou) { e.preventDefault(); limpar(); termosOk(); }
+  }
+
+  function marcarTermos(v: boolean) {
+    setAceitou(v);
+    if (v) setAlertaTermos(false);
+  }
 
   // Leva para a aba "Entrar" mantendo o email digitado no cadastro
   function irParaLogin() {
@@ -159,6 +209,7 @@ function LoginConteudo() {
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
     limpar();
+    if (!termosOk()) return;
     if (!email || !senha) { setErro("Preencha email e senha."); return; }
     setCarregando(true);
     try {
@@ -177,6 +228,7 @@ function LoginConteudo() {
   async function cadastrar(e: React.FormEvent) {
     e.preventDefault();
     limpar();
+    if (!termosOk()) return;
     var nomeT = nome.trim();
     var nums  = wpp.replace(/\D/g, "");
     if (!nomeT)           { setErro("Informe seu nome."); return; }
@@ -230,6 +282,7 @@ function LoginConteudo() {
   // ── Google OAuth ─────────────────────────────────────────────────────────
   async function entrarGoogle() {
     limpar();
+    if (!termosOk()) return;
     setCarregando(true);
     try {
       // Guarda o destino (?redirect=) para o callback devolver o cliente onde ele estava
@@ -284,7 +337,7 @@ function LoginConteudo() {
             {/* Google */}
             <button
               onClick={entrarGoogle}
-              disabled={carregando || !aceitou}
+              disabled={carregando}
               className="w-full flex items-center justify-center gap-3 border-2 border-gray-200
                          rounded-2xl py-3 px-4 font-semibold text-gray-700 text-sm
                          hover:border-gray-300 hover:bg-gray-50 transition-colors
@@ -345,11 +398,12 @@ function LoginConteudo() {
                   required
                 />
 
-                <CheckboxTermos checked={aceitou} onChange={setAceitou} />
+                <CheckboxTermos checked={aceitou} onChange={marcarTermos} alerta={alertaTermos} shakeKey={shakeTermos} />
 
                 <button
                   type="submit"
-                  disabled={carregando || !aceitou}
+                  onClick={validarTermosNoClique}
+                  disabled={carregando}
                   className="w-full bg-cb-marrom text-cb-bege font-extrabold py-3.5 rounded-2xl
                              text-sm hover:bg-cb-marrom/90 transition-colors
                              disabled:opacity-50 disabled:cursor-not-allowed"
@@ -419,11 +473,12 @@ function LoginConteudo() {
                   />
                 </div>
 
-                <CheckboxTermos checked={aceitou} onChange={setAceitou} />
+                <CheckboxTermos checked={aceitou} onChange={marcarTermos} alerta={alertaTermos} shakeKey={shakeTermos} />
 
                 <button
                   type="submit"
-                  disabled={carregando || !aceitou}
+                  onClick={validarTermosNoClique}
+                  disabled={carregando}
                   className="w-full bg-cb-marrom text-cb-bege font-extrabold py-3.5 rounded-2xl
                              text-sm hover:bg-cb-marrom/90 transition-colors
                              disabled:opacity-50 disabled:cursor-not-allowed"
