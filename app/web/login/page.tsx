@@ -107,6 +107,18 @@ function CheckboxTermos({ checked, onChange }: { checked: boolean; onChange: (v:
 
 type Aba = "entrar" | "cadastrar";
 
+const MSG_JA_CADASTRADO = "Este e-mail já está cadastrado. Tente entrar com sua senha ou use o Google.";
+
+// Traduz as mensagens de erro do Supabase Auth para português
+function traduzirErroAuth(msg: string | undefined): string {
+  var m = (msg ?? "").toLowerCase();
+  if (m.includes("already registered") || m.includes("already exists")) return "E-mail já cadastrado. Faça login.";
+  if (m.includes("invalid login credentials")) return "E-mail ou senha incorretos.";
+  if (m.includes("email not confirmed"))       return "Confirme seu e-mail antes de entrar.";
+  if (m.includes("password should be at least")) return "A senha deve ter pelo menos 6 caracteres.";
+  return "Ocorreu um erro. Tente novamente.";
+}
+
 function LoginConteudo() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -125,6 +137,7 @@ function LoginConteudo() {
   const [carregando,   setCarregando]   = useState(false);
   const [erro,         setErro]         = useState("");
   const [aviso,        setAviso]        = useState("");
+  const [jaCadastrado, setJaCadastrado] = useState(false);
 
   useEffect(function () {
     var sb = createSupabaseWebClient();
@@ -133,7 +146,14 @@ function LoginConteudo() {
     });
   }, [router, redirect]);
 
-  function limpar() { setErro(""); setAviso(""); }
+  function limpar() { setErro(""); setAviso(""); setJaCadastrado(false); }
+
+  // Leva para a aba "Entrar" mantendo o email digitado no cadastro
+  function irParaLogin() {
+    limpar();
+    setSenha(""); setConfirmar("");
+    setAba("entrar");
+  }
 
   // ── Entrar ──────────────────────────────────────────────────────────────
   async function entrar(e: React.FormEvent) {
@@ -144,7 +164,7 @@ function LoginConteudo() {
     try {
       var sb = createSupabaseWebClient();
       var { error } = await sb.auth.signInWithPassword({ email, password: senha });
-      if (error) { setErro("Email ou senha incorretos."); return; }
+      if (error) { setErro(traduzirErroAuth(error.message)); return; }
       router.push(redirect);
     } catch {
       setErro("Erro de conexão. Tente novamente.");
@@ -174,7 +194,21 @@ function LoginConteudo() {
         password: senha,
         options: { data: { full_name: nomeT, whatsapp: wppFmt } },
       });
-      if (error) { setErro(error.message); return; }
+      if (error) {
+        var msgErro = (error.message ?? "").toLowerCase();
+        if (msgErro.includes("already registered") || msgErro.includes("already exists")) {
+          setErro(MSG_JA_CADASTRADO); setJaCadastrado(true);
+        } else {
+          setErro(traduzirErroAuth(error.message));
+        }
+        return;
+      }
+      // Com confirmação de email ativa, o Supabase não retorna erro para email
+      // existente: devolve um usuário sem identities
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setErro(MSG_JA_CADASTRADO); setJaCadastrado(true);
+        return;
+      }
       if (data.session) {
         await fetch("/api/web/auth/upsert-cliente", {
           method: "POST",
@@ -272,7 +306,20 @@ function LoginConteudo() {
             </div>
 
             {/* Feedback */}
-            {erro  && <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">{erro}</div>}
+            {erro && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                {erro}
+                {jaCadastrado && (
+                  <button
+                    type="button"
+                    onClick={irParaLogin}
+                    className="block mt-2 font-bold text-cb-marrom hover:underline"
+                  >
+                    → Ir para Login
+                  </button>
+                )}
+              </div>
+            )}
             {aviso && <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-4 py-3">{aviso}</div>}
 
             {/* Formulário Entrar */}
