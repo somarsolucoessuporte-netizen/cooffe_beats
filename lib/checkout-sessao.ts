@@ -120,5 +120,12 @@ export async function criarPedidoDaSessao(sessaoId: string, pagamento: {
     payload: { ...pedido, pagamentoAntecipado: true },
   });
 
+  // Avisa a tela de confirmação do cliente (canal da própria sessão) — o polling é só fallback
+  await supabaseAdmin.channel(`checkout-${sessaoId}`).send({
+    type:    "broadcast",
+    event:   "pagamento:confirmado",
+    payload: { pedidoId: pedido.id },
+  }).catch(function (e) { console.warn("[Checkout] broadcast sessão falhou:", e); });
+
   return pedido.id;
 }

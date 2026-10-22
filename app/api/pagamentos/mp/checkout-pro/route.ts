@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       referencia: sessao.id,
       itens:      itensPreferencia,
       urlRetorno: `${BASE_URL}/web/pedido/confirmacao?sessao=${sessao.id}`,
-      urlWebhook: `${BASE_URL}/api/pagamentos/mp/webhook`,
+      urlWebhook: `${BASE_URL}/api/pagamentos/mercadopago/webhook`,
       expiraEm,
     });
 

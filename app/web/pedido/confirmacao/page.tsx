@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useWebCarrinho } from "@/contexts/WebCarrinhoContext";
+import { supabase } from "@/lib/supabase";
 
 type Estado = "aguardando" | "confirmado" | "expirado" | "erro";
+
+const INTERVALO_MS = 3000;
 
 function ConfirmacaoConteudo() {
   const router       = useRouter();
@@ -14,53 +17,59 @@ function ConfirmacaoConteudo() {
   // Checkout Pro devolve status=approved|pending|rejected|null (null = cliente voltou sem pagar)
   const statusMp     = searchParams.get("status");
   const naoPago      = statusMp === "rejected" || statusMp === "null";
+  const pixPendente  = statusMp === "pending";
   const { limparCarrinho } = useWebCarrinho();
 
-  const [estado,      setEstado]      = useState<Estado>("aguardando");
-  const [tentativas,  setTentativas]  = useState(0);
-
-  const MAX_TENTATIVAS = 15; // 15 × 2s = 30s
+  const [estado, setEstado] = useState<Estado>("aguardando");
+  const finalizado = useRef(false);
 
   useEffect(function () {
     if (!sessaoId || naoPago) { setEstado("erro"); return; }
 
-    async function verificar() {
+    function confirmar(pedidoId: string) {
+      if (finalizado.current) return;
+      finalizado.current = true;
+      setEstado("confirmado");
+      limparCarrinho(); // Checkout Pro mantém o carrinho até o pagamento ser confirmado
+      setTimeout(function () { router.replace(`/web/pedido/${pedidoId}`); }, 1800);
+    }
+
+    // Realtime: o webhook do Mercado Pago avisa assim que o PIX/cartão é aprovado
+    var channel = supabase
+      .channel(`checkout-${sessaoId}`)
+      .on("broadcast", { event: "pagamento:confirmado" }, function (msg) {
+        var payload = msg.payload as { pedidoId?: string };
+        if (payload.pedidoId) confirmar(payload.pedidoId);
+      })
+      .subscribe();
+
+    // Fallback: polling a cada 3s (também reconsulta o MP) até a sessão expirar
+    async function verificar(): Promise<boolean> {
+      if (finalizado.current) return true;
       try {
         var r = await fetch(`/api/web/pagamento/sumup/status?sessao=${sessaoId}`);
         var d = await r.json();
-
         if (!d.ok) { setEstado("erro"); return true; }
-
-        if (d.data?.pedidoId) {
-          setEstado("confirmado");
-          limparCarrinho(); // Checkout Pro mantém o carrinho até o pagamento ser confirmado
-          router.replace(`/web/pedido/${d.data.pedidoId}`);
-          return true; // para o polling
-        }
-
+        if (d.data?.pedidoId) { confirmar(d.data.pedidoId); return true; }
         if (d.data?.expirado) { setEstado("expirado"); return true; }
-
         return false;
       } catch {
         return false;
       }
     }
 
-    // Primeira verificação imediata
-    verificar();
+    var interval: ReturnType<typeof setInterval> | undefined;
+    verificar().then(function (parar) {
+      if (parar) return;
+      interval = setInterval(async function () {
+        if (await verificar()) clearInterval(interval);
+      }, INTERVALO_MS);
+    });
 
-    var count = 0;
-    var interval = setInterval(async function () {
-      count++;
-      var parar = await verificar();
-      if (parar || count >= MAX_TENTATIVAS) {
-        clearInterval(interval);
-        if (count >= MAX_TENTATIVAS) setEstado("expirado");
-      }
-      setTentativas(count);
-    }, 2000);
-
-    return function () { clearInterval(interval); };
+    return function () {
+      if (interval) clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessaoId]);
 
@@ -74,12 +83,13 @@ function ConfirmacaoConteudo() {
         <>
           <div className="w-16 h-16 border-4 border-cb-amber border-t-transparent rounded-full animate-spin" />
           <div>
-            <h1 className="text-xl font-extrabold text-cb-marrom">Confirmando seu pedido</h1>
-            <p className="text-cb-marrom/50 text-sm mt-2">
-              Aguardando a confirmação do pagamento...
-            </p>
-            <p className="text-cb-marrom/30 text-xs mt-4">
-              {Math.max(0, MAX_TENTATIVAS - tentativas) * 2}s restantes
+            <h1 className="text-xl font-extrabold text-cb-marrom">
+              {pixPendente ? "Aguardando pagamento do PIX" : "Confirmando seu pedido"}
+            </h1>
+            <p className="text-cb-marrom/50 text-sm mt-2 leading-relaxed">
+              {pixPendente
+                ? "Pague o PIX no app do seu banco. Esta tela atualiza sozinha assim que o pagamento for confirmado."
+                : "Aguardando a confirmação do pagamento..."}
             </p>
           </div>
         </>
@@ -89,11 +99,11 @@ function ConfirmacaoConteudo() {
       {estado === "confirmado" && (
         <>
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-3xl">
-            ✓
+            ✅
           </div>
           <div>
-            <h1 className="text-xl font-extrabold text-cb-marrom">Pedido confirmado!</h1>
-            <p className="text-cb-marrom/50 text-sm mt-2">Redirecionando...</p>
+            <h1 className="text-xl font-extrabold text-cb-marrom">Pagamento confirmado!</h1>
+            <p className="text-cb-marrom/60 text-sm mt-2">Seu pedido está sendo preparado.</p>
           </div>
         </>
       )}
@@ -105,9 +115,10 @@ function ConfirmacaoConteudo() {
             ⏳
           </div>
           <div>
-            <h1 className="text-xl font-extrabold text-cb-marrom">Pagamento recebido!</h1>
+            <h1 className="text-xl font-extrabold text-cb-marrom">Prazo de pagamento encerrado</h1>
             <p className="text-cb-marrom/60 text-sm mt-2 leading-relaxed">
-              Seu pagamento foi processado. O pedido está sendo confirmado — pode levar alguns instantes.
+              Não recebemos a confirmação do pagamento a tempo. Se você já pagou, o pedido
+              aparece na sua conta assim que o Mercado Pago confirmar.
             </p>
             <p className="text-cb-marrom/40 text-xs mt-3">
               Acesse <strong>Minha Conta → Pedidos</strong> para acompanhar.
