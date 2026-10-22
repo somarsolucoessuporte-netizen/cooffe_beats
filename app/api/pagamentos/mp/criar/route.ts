@@ -24,9 +24,11 @@ export async function POST(req: NextRequest) {
 
     // Valor cobrado vem do pedido gravado no banco, nunca do que o cliente envia.
     const valor = Number(pedido.total);
-    // Sem tipo definido o cliente escolhe crédito/débito na própria Point;
-    // registramos CREDITO por padrão (mesmo critério do fluxo SumUp).
-    const metodoPagamento: MetodoPagamento = metodo === "CARTAO_DEBITO" ? "CARTAO_DEBITO" : "CARTAO_CREDITO";
+    // Sem tipo definido o cliente escolhe PIX, crédito ou débito na própria Point;
+    // gravamos o botão escolhido no totem e o webhook corrige com o tipo real ao aprovar.
+    const metodoPagamento: MetodoPagamento =
+      metodo === "PIX"           ? "PIX" :
+      metodo === "CARTAO_DEBITO" ? "CARTAO_DEBITO" : "CARTAO_CREDITO";
 
     const deviceId = await obterDevicePoint();
     await liberarPointDeCobrancasAnteriores(deviceId, pedidoId);

@@ -6,7 +6,6 @@ import { playClick } from "@/lib/sounds";
 import { useCarrinho } from "@/contexts/CarrinhoContext";
 import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
-import { iniciarPagamentoNFC } from "@/lib/sunmi";
 import { useTotemMobile } from "@/contexts/TotemModoContext";
 import { printCupom } from "@/lib/sunmi-print";
 
@@ -142,10 +141,8 @@ export default function Pagamento() {
   const [carregandoDinheiro, setCarregandoDinheiro] = useState(false);
   const [simulando, setSimulando]       = useState(false);
   const [erro, setErro]                 = useState<string | null>(null);
-  const [checkoutUrl, setCheckoutUrl]   = useState<string | null>(null);
   const [tempoRestante, setTempoRestante] = useState(600);
   // Cobrança SumUp não pôde ser criada: cliente paga direto na maquininha
-  const [semCobranca, setSemCobranca]   = useState(false);
   const [modalManual, setModalManual]   = useState(false);
   const [cancelando, setCancelando]     = useState(false);
 
@@ -356,7 +353,6 @@ export default function Pagamento() {
     setErro(null);
     metodoRef.current = metodo;
 
-    setSemCobranca(false);
 
     var pedido: { id: string; senha: string };
     try {
@@ -376,8 +372,9 @@ export default function Pagamento() {
         return;
       }
 
-      // Cartão vai para a Point do Mercado Pago; PIX segue pelo SumUp
-      var cobrancaRes = await fetch(metodo === "CARTAO" ? "/api/pagamentos/mp/criar" : "/api/pagamentos/sumup/criar", {
+      // PIX e cartão vão para a Point do Mercado Pago: o cliente escolhe a forma na própria
+      // maquininha (sem QR na tela do totem e sem depender do SumUp)
+      var cobrancaRes = await fetch("/api/pagamentos/mp/criar", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -390,26 +387,16 @@ export default function Pagamento() {
       var cobranca = await cobrancaRes.json();
       if (!cobranca.ok) throw new Error(cobranca.error ?? "Erro ao criar cobrança");
 
-      if (cobranca.data.metodo === "MAQUININHA") {
-        // Maquininha física online: totem exibe tela de aguardo
-        readerIdRef.current = cobranca.data.readerId as string;
-        setTela("maquininha");
-        setCarregando(false);
-        iniciarPolling(pedido.id, true);
-      } else {
-        // Fallback web: comportamento anterior (QR PIX ou animação cartão)
-        if (metodo === "CARTAO") iniciarPagamentoNFC(totalValor);
-        if (metodo === "PIX")    setCheckoutUrl(cobranca.data.checkoutUrl as string);
-        setTela(metodo === "PIX" ? "pix" : "cartao");
-        setCarregando(false);
-        iniciarPolling(pedido.id, false);
-      }
+      // Point recebeu a cobrança: totem exibe tela de aguardo
+      readerIdRef.current = cobranca.data.readerId as string;
+      setTela("maquininha");
+      setCarregando(false);
+      iniciarPolling(pedido.id, true);
     } catch(err) {
-      // Sem cobrança na SumUp (ex.: scope payments ainda não liberado): o cliente
-      // paga direto na maquininha e o atendente confirma manualmente. Polling segue
-      // ativo caso o pagamento seja aprovado por outro caminho.
-      console.warn("[Pagamento] Cobrança SumUp não criada:", err instanceof Error ? err.message : err);
-      setSemCobranca(true);
+      // Sem cobrança na Point (aparelho offline, erro na API): o cliente paga direto na
+      // maquininha e o atendente confirma manualmente. Polling segue ativo caso o
+      // pagamento seja aprovado por outro caminho.
+      console.warn("[Pagamento] Cobrança na Point não criada:", err instanceof Error ? err.message : err);
       setTela(metodo === "PIX" ? "pix" : "cartao");
       setCarregando(false);
       iniciarPolling(pedido.id, false);
@@ -461,8 +448,6 @@ export default function Pagamento() {
     pedidoRef.current   = null;
     readerIdRef.current = null;
     setTela("escolha");
-    setCheckoutUrl(null);
-    setSemCobranca(false);
     setErro(null);
     setSimulando(false);
     setTempoRestante(600);
@@ -593,41 +578,8 @@ export default function Pagamento() {
                   {simulando ? "Processando..." : "✅ Simular PIX Aprovado"}
                 </button>
               </>
-            ) : checkoutUrl ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + encodeURIComponent(checkoutUrl)}
-                  alt="QR Code PIX"
-                  width={200}
-                  height={200}
-                  className="rounded-lg"
-                />
-                <p className="text-cb-marrom/50 text-sm">Escaneie com o app do banco</p>
-                {/* Celular: o QR está na própria tela, então oferece abrir o mesmo link de pagamento */}
-                {mobile && (
-                  <a
-                    href={checkoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full min-h-[56px] rounded-2xl bg-cb-marrom text-cb-bege font-extrabold text-[18px]
-                               flex items-center justify-center px-4"
-                  >
-                    Abrir link de pagamento
-                  </a>
-                )}
-                <div className="flex items-center gap-2 text-cb-marrom/70">
-                  <span className="text-sm">Expira em:</span>
-                  <span className={"font-mono font-bold text-lg " + (tempoRestante < 60 ? "text-red-500" : "text-cb-marrom")}>
-                    {formatarTempo(tempoRestante)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-green-600 text-sm animate-pulse">
-                  <span className="text-lg">⟳</span>
-                  <span>Verificando pagamento...</span>
-                </div>
-              </>
-            ) : semCobranca ? (
+            ) : (
+              // Sem cobrança na Point: paga direto na maquininha, atendente confirma
               <>
                 <span className="text-8xl">📱</span>
                 <p className="font-extrabold text-cb-marrom text-2xl text-center">
@@ -638,10 +590,6 @@ export default function Pagamento() {
                   <span>Aguardando confirmação de pagamento...</span>
                 </div>
               </>
-            ) : (
-              <div className="w-48 h-48 bg-cb-marrom/10 rounded-xl flex items-center justify-center">
-                <span className="text-cb-marrom/40 text-sm animate-pulse">Gerando QR Code...</span>
-              </div>
             )}
           </div>
 

@@ -18,13 +18,18 @@ export interface PayloadMp {
  */
 export async function aplicarResultadoMp(
   referencia: string,
-  resultado:  { status: "PENDING" | "PAID" | "FAILED" },
+  resultado:  { status: "PENDING" | "PAID" | "FAILED"; tipo?: string },
   payload:    Prisma.InputJsonObject,
 ) {
   if (resultado.status === "PAID") {
+    // Na Point o cliente escolhe a forma na maquininha: grava o tipo real quando o MP informa
+    const metodo: MetodoPagamento | undefined =
+      resultado.tipo === "bank_transfer" ? "PIX" :
+      resultado.tipo === "debit_card"    ? "CARTAO_DEBITO" :
+      resultado.tipo === "credit_card"   ? "CARTAO_CREDITO" : undefined;
     const result = await prisma.pagamento.updateMany({
       where: { referencia, status: { not: "APROVADO" } },
-      data:  { status: "APROVADO", paidAt: new Date(), payload },
+      data:  { status: "APROVADO", paidAt: new Date(), payload, ...(metodo ? { metodo } : {}) },
     });
 
     if (result.count > 0) {
