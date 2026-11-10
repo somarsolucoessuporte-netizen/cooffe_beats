@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { recebimentosDivididos } from "@/lib/dividir-conta/relatorios";
 
 export async function GET(req: Request) {
   const { erro, empresaId } = await getAdminSession(["ADMIN", "GERENTE"]);
@@ -14,6 +15,7 @@ export async function GET(req: Request) {
   inicio.setHours(0, 0, 0, 0);
   const fim = new Date(data);
   fim.setHours(23, 59, 59, 999);
+  const divisao = await recebimentosDivididos(empresaId, { inicio, fim });
 
   const pedidos = await prisma.pedido.findMany({
     where: {
@@ -66,11 +68,12 @@ export async function GET(req: Request) {
     totalPedidos: pedidos.length,
     cancelados,
     totalVendas,
-    totalPix,
-    totalCartao,
+    totalPix: totalPix + divisao.totalPix,
+    totalCartao: totalCartao + divisao.totalCartao,
     totalDinheiro,
     totalSimulado,
     topProdutos,
     extrato,
+    divisao,
   });
 }

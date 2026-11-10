@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
+import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 const Schema = z.object({
   metodo: z.enum(["PIX", "CARTAO"]),
@@ -21,6 +22,8 @@ export async function POST(
   const { pedidoId } = await params;
 
   try {
+    const bloqueio = await protegerPedido(pedidoId);
+    if (bloqueio) return bloqueio;
     const validacao = Schema.safeParse(await req.json().catch(() => null));
     if (!validacao.success) {
       return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 });

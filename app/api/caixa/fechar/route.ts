@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { db, estruturaPronta } from "@/lib/dividir-conta/database";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -15,6 +16,10 @@ export async function POST(req: Request) {
     where: { empresaId, status: "ABERTO" },
   });
   if (!caixa) return erroResposta("Nenhum caixa aberto encontrado", 404);
+  if (await estruturaPronta()) {
+    const pendentes = await db.query(`SELECT c.id FROM "ContaDividida" c JOIN "Pedido" p ON p.id=c."pedidoId" WHERE p."caixaId"=$1 AND c.status NOT IN ('QUITADA','CANCELADA') LIMIT 1`, [caixa.id]);
+    if (pendentes.length) return erroResposta("Há divisão de conta pendente ou em revisão neste caixa", 409);
+  }
 
   const body = await req.json().catch(() => ({}));
 

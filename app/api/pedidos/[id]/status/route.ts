@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { supabaseAdmin } from "@/lib/supabase";
 import { notificarWhatsApp } from "@/lib/notificar-whatsapp";
+import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 const AtualizarStatusSchema = z.object({
   status: z.enum(["RECEBIDO", "EM_PREPARO", "PRONTO", "ENTREGUE", "CANCELADO"]),
@@ -24,6 +25,13 @@ export async function PATCH(
     }
 
     const { status } = validacao.data;
+
+    // A split draft cannot enter preparation or be cancelled through a legacy API.
+    const bloqueio = await protegerPedido(id);
+    if (bloqueio) {
+      const pedidoDividido = await prisma.pedido.findUnique({ where: { id }, select: { pago: true } });
+      if (!pedidoDividido?.pago || status === "CANCELADO") return bloqueio;
+    }
 
     // Campos de timestamp conforme transição de status
     const timestamps: Record<string, Date | null> = {};

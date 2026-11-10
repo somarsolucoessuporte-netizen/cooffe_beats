@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { supabaseAdmin } from "@/lib/supabase";
+import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 const Schema = z.object({
   pedidoId: z.string(),
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest) {
     if (!validacao.success) return erroResposta(validacao.error.message);
 
     const { pedidoId, valor } = validacao.data;
+    const bloqueio = await protegerPedido(pedidoId);
+    if (bloqueio) return bloqueio;
 
     const pagamento = await prisma.$transaction(async function (tx) {
       // Cria registro de pagamento: DINHEIRO + APROVADO

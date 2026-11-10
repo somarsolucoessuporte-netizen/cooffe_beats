@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.test-dividir-conta/
 
 # next.js
 /.next/

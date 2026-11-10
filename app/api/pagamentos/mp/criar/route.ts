@@ -3,6 +3,7 @@ import { obterDevicePoint, criarPagamentoPoint, cancelarPagamentoPoint } from "@
 import { reconciliarPagamentoMp, type PayloadMp } from "@/lib/mp-pagamento";
 import { prisma } from "@/lib/prisma";
 import type { MetodoPagamento } from "@prisma/client";
+import { executarLegado, protegerPedido } from "@/lib/dividir-conta/guards";
 
 /**
  * POST /api/pagamentos/mp/criar
@@ -10,12 +11,19 @@ import type { MetodoPagamento } from "@prisma/client";
  * A confirmação chega pelo webhook (/api/pagamentos/mp/webhook).
  */
 export async function POST(req: NextRequest) {
+  return executarLegado(() => criarIntegral(req));
+}
+
+async function criarIntegral(req: NextRequest) {
   try {
     const { pedidoId, descricao, referencia, metodo } = await req.json();
 
     if (!pedidoId || !referencia) {
       return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 });
     }
+
+    const bloqueio = await protegerPedido(pedidoId);
+    if (bloqueio) return bloqueio;
 
     const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
     if (!pedido) {

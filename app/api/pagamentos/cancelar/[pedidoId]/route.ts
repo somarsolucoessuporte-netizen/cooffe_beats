@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cancelarPagamentoPoint } from "@/lib/mercadopago";
+import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 /**
  * POST /api/pagamentos/cancelar/[pedidoId]
@@ -15,6 +16,8 @@ export async function POST(
   const { pedidoId } = await params;
 
   try {
+    const bloqueio = await protegerPedido(pedidoId);
+    if (bloqueio) return bloqueio;
     const pagamento = await prisma.pagamento.findUnique({
       where:  { pedidoId },
       select: { status: true, payload: true },

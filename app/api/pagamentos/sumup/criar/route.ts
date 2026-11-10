@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getReaders, enviarParaMaquininha, criarCheckout } from "@/lib/sumup";
 import { prisma } from "@/lib/prisma";
 import type { MetodoPagamento } from "@prisma/client";
+import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +11,9 @@ export async function POST(req: NextRequest) {
     if (!pedidoId || !referencia) {
       return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 });
     }
+
+    const bloqueio = await protegerPedido(pedidoId);
+    if (bloqueio) return bloqueio;
 
     const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
     if (!pedido) {

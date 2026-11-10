@@ -8,6 +8,12 @@ import HeaderTotem from "@/components/totem/HeaderTotem";
 import { formatarMoeda } from "@/lib/utils";
 import { useTotemMobile } from "@/contexts/TotemModoContext";
 import { printCupom } from "@/lib/sunmi-print";
+import dynamic from "next/dynamic";
+import { DIVISAO_STORAGE } from "@/lib/dividir-conta/domain";
+
+const DividirConta = dynamic(() => import("@/components/totem/DividirConta"), {
+  loading: () => <p className="p-6 text-center">Carregando acompanhamento da conta…</p>,
+});
 
 type Tela = "escolha" | "pix" | "cartao" | "maquininha";
 
@@ -135,6 +141,12 @@ export default function Pagamento() {
   const router = useRouter();
   const { itens, totalValor, empresaId, limparCarrinho } = useCarrinho();
   const mobile = useTotemMobile(); // celular: cards de pagamento empilhados
+  const [divisaoDisponivel, setDivisaoDisponivel] = useState(false);
+  const [modoDivisao, setModoDivisao] = useState(false);
+  useEffect(() => {
+    try { if (sessionStorage.getItem(DIVISAO_STORAGE)) setModoDivisao(true); } catch { /* creation requires storage */ }
+    fetch("/api/pagamentos/dividir/config", { cache: "no-store" }).then(r => r.json()).then(d => setDivisaoDisponivel(d.enabled === true)).catch(() => {});
+  }, []);
 
   const [tela, setTela]                 = useState<Tela>("escolha");
   const [carregando, setCarregando]     = useState(false);
@@ -347,6 +359,7 @@ export default function Pagamento() {
   }, [empresaId, itens]);
 
   const selecionarMetodo = useCallback(async function(metodo: "PIX" | "CARTAO") {
+    try { if (sessionStorage.getItem(DIVISAO_STORAGE)) { setModoDivisao(true); return; } } catch { /* preserve integral flow when storage is unavailable */ }
     if (carregando || itens.length === 0) return;
     playClick();
     setCarregando(true);
@@ -406,6 +419,7 @@ export default function Pagamento() {
 
   // Dinheiro: cria pedido + registra e vai direto para confirmação (sem SumUp)
   const selecionarDinheiro = useCallback(async function() {
+    try { if (sessionStorage.getItem(DIVISAO_STORAGE)) { setModoDivisao(true); return; } } catch { /* preserve integral flow when storage is unavailable */ }
     if (carregandoDinheiro) return;
     if (itens.length === 0) { setErro("Carrinho vazio. Adicione itens antes de pagar."); return; }
     playClick();
@@ -665,6 +679,17 @@ export default function Pagamento() {
     );
   }
 
+  if (modoDivisao) return <div className="h-full flex flex-col"><HeaderTotem mostrarVoltar={false} /><DividirConta itens={itens} total={totalValor} onVoltar={() => setModoDivisao(false)} onQuitada={async pedido => {
+    const response = await fetch(`/api/pedidos/${pedido.id}`);
+    const data = await response.json();
+    if (!data.ok) throw new Error("Pedido indisponível");
+    const cupom = { numeroPedido: pedido.senha, total: pedido.total, metodoPagamento: "DIVIDIDO", itens: data.data.itens.map((i: { produto: { nome: string }; quantidade: number; precoUnit: string }) => ({ nome: i.produto.nome, quantidade: i.quantidade, preco: Number(i.precoUnit) })) };
+    printCupom({ ...cupom, via: "CLIENTE" }).catch(() => {});
+    printCupom({ ...cupom, via: "COZINHA" }).catch(() => {});
+    limparCarrinho();
+    router.push(`/confirmacao?senha=${encodeURIComponent(pedido.senha)}&id=${pedido.id}`);
+  }} /></div>;
+
   // ─── TELA ESCOLHA ────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col animate-fadeIn">
@@ -730,7 +755,7 @@ export default function Pagamento() {
           </button>
 
           {/* Placeholder para manter grid simétrico */}
-          {!mobile && <div />}
+          {divisaoDisponivel ? <button disabled={carregando || carregandoDinheiro || itens.length === 0 || totalValor < 0.02} onClick={() => setModoDivisao(true)} className={(mobile ? CARD_MOBILE : "flex flex-col items-center gap-3 p-6 min-h-[130px] ") + "bg-white border-2 border-cb-marrom/20 rounded-2xl touch-manipulation btn-totem disabled:opacity-50"}><span className="text-4xl">👥</span><span className="font-bold">Dividir conta</span><span className="text-xs">Por pessoas ou valores</span></button> : !mobile && <div />}
         </div>
 
         {carregando && (

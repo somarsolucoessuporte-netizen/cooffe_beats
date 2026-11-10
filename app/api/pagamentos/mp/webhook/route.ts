@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import { verificarPagamentoPoint, consultarPagamentoMp, validarAssinaturaWebhook } from "@/lib/mercadopago";
 import { aplicarResultadoMp, aplicarPagamentoCheckoutPro } from "@/lib/mp-pagamento";
+import { divisao, notificarQuitadas } from "@/lib/dividir-conta/runtime";
+import { resultadoPayment, resultadoIntent } from "@/lib/dividir-conta/mercadopago";
+import { referenciaDividida } from "@/lib/dividir-conta/guards";
 
 /**
  * POST /api/pagamentos/mp/webhook
@@ -38,6 +41,12 @@ export async function POST(req: NextRequest) {
         console.warn("[MP Webhook] payment sem external_reference:", id);
         return Response.json({ ok: true });
       }
+      if (await referenciaDividida(resultado.referencia)) {
+        const completo = await resultadoPayment(String(id));
+        await divisao.receber(completo, `webhook:${String(id)}:${JSON.stringify(completo)}`);
+        await notificarQuitadas().catch(() => {});
+        return Response.json({ ok: true });
+      }
       if (await aplicarPagamentoCheckoutPro(resultado, body)) return Response.json({ ok: true });
       await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", ...resultado, evento: body });
       return Response.json({ ok: true });
@@ -46,6 +55,12 @@ export async function POST(req: NextRequest) {
     const resultado = await verificarPagamentoPoint(String(id));
     if (!resultado.referencia) {
       console.warn("[MP Webhook] intenção sem external_reference:", id);
+      return Response.json({ ok: true });
+    }
+    if (await referenciaDividida(resultado.referencia)) {
+      const completo = await resultadoIntent(String(id));
+      await divisao.receber(completo, `webhook:${String(id)}:${JSON.stringify(completo)}`);
+      await notificarQuitadas().catch(() => {});
       return Response.json({ ok: true });
     }
     await aplicarResultadoMp(resultado.referencia, resultado, {

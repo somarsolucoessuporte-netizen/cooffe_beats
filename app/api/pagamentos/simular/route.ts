@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
+import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 const SimularPagamentoSchema = z.object({
   pedidoId: z.string(),
@@ -23,6 +24,8 @@ export async function POST(req: NextRequest) {
     }
 
     const { pedidoId, valor } = validacao.data;
+    const bloqueio = await protegerPedido(pedidoId);
+    if (bloqueio) return bloqueio;
 
     const pagamento = await prisma.$transaction(async (tx) => {
       const pag = await tx.pagamento.create({

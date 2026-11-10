@@ -49,6 +49,7 @@ export async function criarPagamentoPoint(params: {
   descricao:  string;
   deviceId:   string;
   tipo?:      "credit_card" | "debit_card";
+  semRetentativa?: boolean;
 }): Promise<{ id: string; state: string }> {
   const res = await new Point(config()).createPaymentIntent({
     device_id: params.deviceId,
@@ -64,7 +65,7 @@ export async function criarPagamentoPoint(params: {
         print_on_terminal:  true,
       },
     },
-    requestOptions: { idempotencyKey: params.referencia },
+    requestOptions: { idempotencyKey: params.referencia, ...(params.semRetentativa ? { maxRetries: 0 } : {}) },
   });
 
   if (!res.id) throw new Error("Mercado Pago Point: intenção não criada " + JSON.stringify(res));

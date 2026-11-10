@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { mesaComDivisaoPendente } from "@/lib/dividir-conta/relatorios";
 
 export async function POST(
   _req: Request,
@@ -13,6 +14,7 @@ export async function POST(
 
   const mesa = await prisma.mesa.findFirst({ where: { id, empresaId } });
   if (!mesa) return erroResposta("Mesa não encontrada", 404);
+  if (await mesaComDivisaoPendente(id)) return erroResposta("Há divisão de conta com saldo ou pagamento pendente nesta mesa", 409);
 
   const pedidosAbertos = await prisma.pedido.findMany({
     where: { mesaId: id, status: "COMANDA_ABERTA" },

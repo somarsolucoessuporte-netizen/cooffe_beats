@@ -8,6 +8,7 @@
     "start": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint",
+    "test:dividir-conta": "node scripts/test-dividir-conta.mjs",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
@@ -42,6 +43,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -30,6 +30,7 @@ model Empresa {
   insumos        Insumo[]
   movimentacoes  MovimentacaoEstoque[]
   inventarios    Inventario[]
+  contasDivididas ContaDividida[]
 }
 
 model Usuario {
@@ -147,6 +148,7 @@ model Pedido {
   canalVenda CanalVenda? @relation(fields: [canalVendaId], references: [id])
   itens      ItemPedido[]
   pagamento  Pagamento?
+  contaDividida ContaDividida?
 }
 
 enum StatusPedido {
@@ -419,6 +421,77 @@ model Log {
   criadoEm  DateTime @default(now())
 
   @@map("logs")
+}
+
+// Divisão é aditiva: Pagamento continua representando apenas o fluxo integral.
+// CHECKs, RLS, triggers e índices parciais estão na migration SQL revisável.
+model DivisaoControle {
+  id Int @id
+}
+
+model ContaDividida {
+  id String @id
+  pedidoId String @unique
+  empresaId String
+  tokenHash String @unique
+  criacaoHash String @unique
+  fingerprint String
+  requestHash String
+  total Int
+  status String @default("ABERTA")
+  notificada Boolean @default(false)
+  criadoEm DateTime @default(now()) @db.Timestamp(3)
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parcelas ParcelaConta[]
+  tentativas TentativaParcela[]
+  @@index([empresaId], map: "ContaDividida_empresa")
+}
+
+model ParcelaConta {
+  id String @id
+  contaId String
+  ordem Int
+  valor Int
+  status String @default("ABERTA")
+  conta ContaDividida @relation(fields: [contaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tentativas TentativaParcela[]
+  @@unique([contaId, ordem])
+}
+
+model TentativaParcela {
+  id String @id
+  contaId String
+  parcelaId String
+  chave String @unique
+  referencia String @unique
+  deviceId String
+  intentId String? @unique
+  paymentId String? @unique
+  valor Int
+  metodo String?
+  status String
+  criadoEm DateTime @default(now()) @db.Timestamp(3)
+  consultadoEm DateTime? @db.Timestamp(3)
+  aprovadoEm DateTime? @db.Timestamp(3)
+  conta ContaDividida @relation(fields: [contaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parcela ParcelaConta @relation(fields: [parcelaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eventos EventoParcela[]
+  @@index([contaId], map: "TentativaParcela_conta")
+}
+
+model EventoParcela {
+  id String @id
+  tentativaId String
+  resultado Json
+  processado Boolean @default(false)
+  criadoEm DateTime @default(now()) @db.Timestamp(3)
+  tentativa TentativaParcela @relation(fields: [tentativaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model DivisaoOperacaoLegada {
+  id String @id
+  criadoEm DateTime @default(now()) @db.Timestamp(3)
 }
 
 // ══════════════════════════════════════════════════════

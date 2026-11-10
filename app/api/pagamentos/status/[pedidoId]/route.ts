@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { reconciliarPagamentoMp } from "@/lib/mp-pagamento";
+import { db, estruturaPronta } from "@/lib/dividir-conta/database";
 
 // Reconsulta na API do Mercado Pago no máximo a cada 6s por pedido (o polling roda a cada 2s)
 const INTERVALO_RECONCILIAR_MS = 6000;
@@ -14,6 +15,10 @@ export async function GET(
   { params }: { params: Promise<{ pedidoId: string }> },
 ) {
   const { pedidoId } = await params;
+  if (await estruturaPronta()) {
+    const [conta] = await db.query<{ status: string }>(`SELECT status FROM "ContaDividida" WHERE "pedidoId"=$1`, [pedidoId]);
+    if (conta) return NextResponse.json({ ok: true, dividido: true, status: conta.status === "QUITADA" ? "APROVADO" : "PENDENTE" }, { headers: { "Cache-Control": "no-store" } });
+  }
 
   let pagamento = await prisma.pagamento.findUnique({
     where:  { pedidoId },

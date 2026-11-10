@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { recebimentosDivididos } from "@/lib/dividir-conta/relatorios";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (!caixa) return resposta({ aberto: false, caixa: null });
+  const divisao = await recebimentosDivididos(empresaId, { caixaId: caixa.id });
 
   const totalVendas   = caixa.pedidos.reduce((acc, p) => acc + Number(p.total), 0);
   const totalPix      = caixa.pedidos.filter(p => p.pagamento?.metodo === "PIX").reduce((acc, p) => acc + Number(p.total), 0);
@@ -56,10 +58,11 @@ export async function GET(req: NextRequest) {
     resumo: {
       totalPedidos: caixa.pedidos.length,
       totalVendas,
-      totalPix,
-      totalCartao,
+      totalPix: totalPix + divisao.totalPix,
+      totalCartao: totalCartao + divisao.totalCartao,
       totalDinheiro,
       ticketMedio,
+      divisao,
     },
   });
 }
