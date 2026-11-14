@@ -38,6 +38,11 @@ async function criarIntegral(req: NextRequest) {
       metodo === "PIX"           ? "PIX" :
       metodo === "CARTAO_DEBITO" ? "CARTAO_DEBITO" : "CARTAO_CREDITO";
 
+    // Tipo enviado à Point API: PIX → "qr", crédito → "credit_card", débito → "debit_card"
+    const tipoPoint =
+      metodoPagamento === "PIX"           ? "qr" :
+      metodoPagamento === "CARTAO_DEBITO" ? "debit_card" : "credit_card";
+
     const deviceId = await obterDevicePoint();
     await liberarPointDeCobrancasAnteriores(deviceId, pedidoId);
     const intent   = await criarPagamentoPoint({
@@ -45,6 +50,7 @@ async function criarIntegral(req: NextRequest) {
       referencia,
       descricao: descricao ?? "",
       deviceId,
+      tipo: tipoPoint,
     });
 
     await prisma.pagamento.create({

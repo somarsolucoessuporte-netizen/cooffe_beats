@@ -48,7 +48,7 @@ export async function criarPagamentoPoint(params: {
   referencia: string;
   descricao:  string;
   deviceId:   string;
-  tipo?:      "credit_card" | "debit_card";
+  tipo?:      "credit_card" | "debit_card" | "qr";
   semRetentativa?: boolean;
 }): Promise<{ id: string; state: string }> {
   const res = await new Point(config()).createPaymentIntent({
