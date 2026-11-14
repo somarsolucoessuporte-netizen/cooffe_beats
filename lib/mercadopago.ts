@@ -58,7 +58,9 @@ export async function criarPagamentoPoint(params: {
       amount:      Math.round(params.valor * 100),
       description: params.descricao.slice(0, 64),
       payment: params.tipo
-        ? { installments: 1, type: params.tipo, installments_cost: "seller" }
+        ? params.tipo === "qr"
+          ? { type: "qr" }
+          : { installments: 1, type: params.tipo, installments_cost: "seller" }
         : undefined,
       additional_info: {
         external_reference: params.referencia, // correlaciona com o Pagamento no webhook
