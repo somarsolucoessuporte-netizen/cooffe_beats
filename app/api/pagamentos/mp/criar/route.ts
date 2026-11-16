@@ -38,10 +38,8 @@ async function criarIntegral(req: NextRequest) {
       metodo === "PIX"           ? "PIX" :
       metodo === "CARTAO_DEBITO" ? "CARTAO_DEBITO" : "CARTAO_CREDITO";
 
-    // Tipo enviado à Point API: PIX → "qr", crédito → "credit_card", débito → "debit_card"
-    const tipoPoint =
-      metodoPagamento === "PIX"           ? "qr" :
-      metodoPagamento === "CARTAO_DEBITO" ? "debit_card" : "credit_card";
+    // Tipo enviado à Point API: PIX → "qr"; cartão → sem tipo (a maquineta mostra o menu débito/crédito)
+    const tipoPoint = metodoPagamento === "PIX" ? "qr" : undefined;
 
     const deviceId = await obterDevicePoint();
     await liberarPointDeCobrancasAnteriores(deviceId, pedidoId);
