@@ -9,6 +9,7 @@ import { formatarMoeda } from "@/lib/utils";
 import { useTotemMobile } from "@/contexts/TotemModoContext";
 import { printCupom } from "@/lib/sunmi-print";
 import dynamic from "next/dynamic";
+import { QRCodeSVG } from "qrcode.react";
 import { DIVISAO_STORAGE } from "@/lib/dividir-conta/domain";
 
 const DividirConta = dynamic(() => import("@/components/totem/DividirConta"), {
@@ -167,6 +168,8 @@ export default function Pagamento() {
   const metodoRef   = useRef<"PIX" | "CARTAO" | "DINHEIRO">("PIX");
   // ID do reader quando o pagamento vai para maquininha física
   const readerIdRef = useRef<string | null>(null);
+  // QR Pix dinâmico (fallback na tela, em paralelo à maquininha); null se não gerado
+  const [pixQrData, setPixQrData]       = useState<string | null>(null);
 
   useEffect(function() {
     return function() {
@@ -387,17 +390,36 @@ export default function Pagamento() {
 
       // PIX e cartão vão para a Point do Mercado Pago: o cliente escolhe a forma na própria
       // maquininha (sem QR na tela do totem e sem depender do SumUp)
-      var cobrancaRes = await fetch("/api/pagamentos/mp/criar", {
+      var referenciaMp = "CB-" + pedido.senha + "-" + Date.now();
+      var descricaoMp  = "Coffee & Beats – " + pedido.senha;
+      // Pix: gera TAMBÉM o QR dinâmico na tela, em paralelo à Point. Falha no QR nunca
+      // impede a cobrança na maquineta.
+      var pixQrPromise: Promise<string | null> = metodo === "PIX"
+        ? fetch("/api/pagamentos/mp/pix-qr", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ pedidoId: pedido.id, valor: totalRef.current, referencia: referenciaMp, descricao: descricaoMp }),
+          }).then(function(r) { return r.json(); })
+            .then(function(d) { return d && d.ok && d.qrData ? d.qrData as string : null; })
+            .catch(function() { return null; })
+        : Promise.resolve(null);
+
+      var cobrancaPromise = fetch("/api/pagamentos/mp/criar", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           pedidoId:   pedido.id,
           metodo:     metodo,
-          descricao:  "Coffee & Beats – " + pedido.senha,
-          referencia: "CB-" + pedido.senha + "-" + Date.now(),
+          descricao:  descricaoMp,
+          referencia: referenciaMp,
         }),
-      });
-      var cobranca = await cobrancaRes.json();
+      }).then(function(r) { return r.json(); });
+
+      var [qrGerado, cobranca] = await Promise.all([
+        pixQrPromise,
+        cobrancaPromise.catch(function(e) { return { ok: false, error: e instanceof Error ? e.message : "Erro ao criar cobrança" }; }),
+      ]);
+      setPixQrData(qrGerado);
       if (!cobranca.ok) throw new Error(cobranca.error ?? "Erro ao criar cobrança");
 
       // Point recebeu a cobrança: totem exibe tela de aguardo
@@ -471,6 +493,7 @@ export default function Pagamento() {
   // Rodapé comum às telas de aguardo: confirmação manual do atendente (com confirmação dupla)
   // acima do cancelar, empilhados no fluxo normal da página (sem fixed/absolute)
   // Chamado como função (não <Componente />) para o modal não remontar a cada tick do timer
+    setPixQrData(null);
   function acoesAguardo() {
     return (
       <>
@@ -519,6 +542,18 @@ export default function Pagamento() {
             Pagamento na Maquininha
           </h1>
           <p className="text-cb-marrom/60 text-lg">
+  // QR Pix dinâmico do totem (fallback); o polling existente confirma qualquer um dos caminhos
+  function blocoPixQr() {
+    if (!pixQrData || metodoRef.current !== "PIX") return null;
+    return (
+      <div className="flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
+        <p className="font-extrabold text-cb-marrom text-xl text-center">Escaneie com qualquer app de banco</p>
+        <QRCodeSVG value={pixQrData} size={220} marginSize={2} />
+        <p className="text-cb-marrom/60 text-sm text-center">Ou pague pela maquininha ao lado</p>
+      </div>
+    );
+  }
+
             Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
           </p>
 
@@ -561,6 +596,8 @@ export default function Pagamento() {
         </div>
       </div>
     );
+          {blocoPixQr()}
+
   }
 
   // ─── TELA PIX ────────────────────────────────────────────────────────────────

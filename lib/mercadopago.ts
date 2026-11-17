@@ -140,6 +140,74 @@ export async function buscarPagamentoPorReferencia(referencia: string): Promise<
   return escolhido ? resultadoPagamento(escolhido) : null;
 }
 
+// ─── PIX QR DINÂMICO (Orders API) ────────────────────────────────────────────
+
+/**
+ * Gera um QR Pix dinâmico (Orders API) para exibir na tela do totem, em paralelo
+ * à cobrança da Point. A order expira sozinha no Mercado Pago.
+ * Sem external_pos_id: a API aceita sem ele e não há env configurada para isso.
+ */
+export async function criarPixQRCode(params: {
+  valor:      number;
+  referencia: string;
+  descricao:  string;
+}): Promise<{ orderId: string; qrData: string }> {
+  const accessToken = process.env.MP_ACCESS_TOKEN;
+  if (!accessToken) throw new Error("Mercado Pago: configure MP_ACCESS_TOKEN no .env");
+
+  const total = params.valor.toFixed(2);
+  const res = await fetch("https://api.mercadopago.com/v1/orders", {
+    method:  "POST",
+    headers: {
+      Authorization:       `Bearer ${accessToken}`,
+      "X-Idempotency-Key": crypto.randomUUID(),
+      "Content-Type":      "application/json",
+    },
+    body: JSON.stringify({
+      type:               "qr",
+      total_amount:       total,
+      external_reference: params.referencia,
+      description:        params.descricao.slice(0, 150),
+      config:             { qr: { mode: "dynamic" } },
+      transactions:       { payments: [{ amount: total }] },
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  const json = await res.json().catch(() => null) as
+    { id?: string; type_response?: { qr_data?: string }; message?: string; errors?: unknown } | null;
+
+  if (!res.ok || !json?.id || !json.type_response?.qr_data) {
+    console.error("[MP Pix QR] falha ao criar order:", res.status, JSON.stringify(json));
+    throw new Error(json?.message ?? `Mercado Pago: order Pix não criada (HTTP ${res.status})`);
+  }
+  return { orderId: json.id, qrData: json.type_response.qr_data };
+}
+
+/** Consulta uma order (tópico "order" do webhook). Só "processed" conta como pago. */
+export async function consultarOrderMp(orderId: string): Promise<ResultadoPagamentoMp> {
+  const accessToken = process.env.MP_ACCESS_TOKEN;
+  if (!accessToken) throw new Error("Mercado Pago: configure MP_ACCESS_TOKEN no .env");
+
+  const res = await fetch(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal:  AbortSignal.timeout(10_000),
+  });
+  const json = await res.json().catch(() => null) as
+    { id?: string; status?: string; external_reference?: string } | null;
+  if (!res.ok || !json?.id) throw new Error(`Mercado Pago: order ${orderId} não consultada (HTTP ${res.status})`);
+
+  const pago = json.status === "processed" || json.status === "paid";
+  return {
+    // Order não paga (created/expired/canceled) fica PENDING: não pode recusar o Pagamento,
+    // porque a Point ainda pode estar cobrando em paralelo.
+    status:     pago ? "PAID" : "PENDING",
+    referencia: json.external_reference ?? undefined,
+    paymentId:  json.id,
+    tipo:       "bank_transfer",
+  };
+}
+
 // ─── CHECKOUT PRO (pedido online) ────────────────────────────────────────────
 
 /** Cria a preferência do Checkout Pro — o cliente paga na página do Mercado Pago. */

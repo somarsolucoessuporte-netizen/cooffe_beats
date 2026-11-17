@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { verificarPagamentoPoint, consultarPagamentoMp, validarAssinaturaWebhook } from "@/lib/mercadopago";
+import { verificarPagamentoPoint, consultarPagamentoMp, consultarOrderMp, validarAssinaturaWebhook } from "@/lib/mercadopago";
 import { aplicarResultadoMp, aplicarPagamentoCheckoutPro } from "@/lib/mp-pagamento";
 import { divisao, notificarQuitadas } from "@/lib/dividir-conta/runtime";
 import { resultadoPayment, resultadoIntent } from "@/lib/dividir-conta/mercadopago";
@@ -31,6 +31,17 @@ export async function POST(req: NextRequest) {
     // Formatos aceitos: { id, state, ... } (Point) ou { data: { id } } (padrão)
     const id = (body.data?.id ?? body.id ?? dataId) as string | number | undefined;
     if (!id) return Response.json({ ok: true });
+
+    // Pix QR dinâmico do totem (Orders API), em paralelo à Point. A referência da order
+    // é a mesma do Pagamento criado para a maquineta; quem confirmar primeiro fecha o pedido
+    // (aplicarResultadoMp é idempotente).
+    if (topico === "order" || topico === "orders") {
+      const resultado = await consultarOrderMp(String(id));
+      if (resultado.status === "PAID" && resultado.referencia) {
+        await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", pixQr: true, ...resultado, evento: body });
+      }
+      return Response.json({ ok: true });
+    }
 
     // Tópico "payment": Checkout Pro (pedido online — referência é a CheckoutSessao)
     // ou fallback da Point quando a notificação da intenção não chega (ex.: aviso
