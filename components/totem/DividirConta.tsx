@@ -289,11 +289,11 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
         const parte = conta.parcelas.find(p => p.id === painel.parcelaId);
         if (!parte) return null;
         const din = dinamicoPronto(painel.parcelaId);
-        return <div className="w-full max-w-xl bg-white rounded-2xl p-5 flex flex-col items-center gap-4 border-2 border-cb-amber/50" aria-label="Pix da parcela">
+        return <div className="w-full max-w-xl bg-white rounded-2xl p-3 flex flex-col items-center gap-2 border-2 border-cb-amber/50" aria-label="Pix da parcela">
           <p className="font-extrabold text-xl">Pix · Pessoa {parte.ordem} · {moeda(parte.valor)}</p>
           {painel.dinamico === "gerando" && <p className="text-sm animate-pulse">Gerando QR Pix…</p>}
           {painel.dinamico === "pronto" && din && <>
-            <QRCodeSVG value={din.qrData} size={260} marginSize={2} level="M" />
+            <div className="bg-white p-1" style={{ width: "clamp(220px, 32vh, 280px)", height: "clamp(220px, 32vh, 280px)" }}><QRCodeSVG value={din.qrData} size={280} marginSize={2} level="M" style={{ width: "100%", height: "100%" }} /></div>
             <p className="font-bold">Escaneie com o app do seu banco</p>
             <button onClick={async () => { if (await copiar(din.qrData)) { setCopiado("din"); setTimeout(() => setCopiado(""), 3000); } }} className="w-full border-2 border-cb-marrom/30 rounded-xl px-5 py-3 font-bold touch-manipulation">{copiado === "din" ? "✓ Código copiado" : "Copiar código Pix"}</button>
             <p className="text-xs text-cb-marrom/60 text-center">A parcela é confirmada automaticamente quando o pagamento cair.</p>
@@ -303,9 +303,9 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
             {painel.erro && <p className="text-xs text-red-700 text-center">{painel.erro}</p>}
             <button onClick={() => gerarDinamico(painel.parcelaId)} className="w-full bg-cb-marrom text-white rounded-xl px-5 py-3 font-bold touch-manipulation">Tentar novamente</button>
           </div>}
-          {estaticoVisivel && painel.chavePix && <div className="w-full flex flex-col items-center gap-3 border-t pt-4">
+          {estaticoVisivel && painel.chavePix && <div className="w-full flex flex-col items-center gap-2 border-t pt-2">
             <p className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-3 py-1">Pix reserva (chave CNPJ)</p>
-            <QRCodeSVG value={painel.chavePix} size={260} marginSize={2} level="M" />
+            <div className="bg-white p-1" style={{ width: "clamp(220px, 32vh, 280px)", height: "clamp(220px, 32vh, 280px)" }}><QRCodeSVG value={painel.chavePix} size={280} marginSize={2} level="M" style={{ width: "100%", height: "100%" }} /></div>
             <p className="font-bold">{moeda(parte.valor)} · Escaneie com o app do seu banco</p>
             <button onClick={async () => { if (await copiar(painel.chavePix)) { setCopiado("est"); setTimeout(() => setCopiado(""), 3000); } }} className="w-full border-2 border-cb-marrom/30 rounded-xl px-5 py-3 font-bold touch-manipulation">{copiado === "est" ? "✓ Código copiado" : "Copiar código Pix"}</button>
             <p className="text-sm font-bold text-amber-800 bg-amber-50 rounded-xl px-3 py-2 text-center">Após pagar, mostre o comprovante ao atendente</p>

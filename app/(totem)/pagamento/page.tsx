@@ -588,7 +588,7 @@ export default function Pagamento() {
   function acoesAguardo() {
     return (
       <>
-        <div className="flex flex-col gap-3 w-full max-w-md shrink-0">
+        <div className="flex flex-col gap-2 w-full max-w-md shrink-0">
           <div className="flex flex-col items-center gap-1">
             <button
               onClick={function() { playClick(); pixManualRef.current = false; setModalPix(false); setModalManual(true); }}
@@ -632,23 +632,23 @@ export default function Pagamento() {
   function painelPix() {
     var decorrido = pixDin.estado === "gerando" && pixDin.desde ? Date.now() - pixDin.desde : 0;
     var visivel = pixEstaticoVisivel({ ativo: PIX_DINAMICO_ATIVO, estado: pixDin.estado, decorridoMs: decorrido });
-    var tamanhoQr = mobile ? 240 : 300;
+    var tamanhoQr = 280;
     var dinamico = !PIX_DINAMICO_ATIVO ? null : (
-      <div className="w-full flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
-        <p className="font-extrabold text-cb-marrom text-2xl text-center">Pague com Pix</p>
+      <div className="w-full flex flex-col items-center gap-2 bg-white rounded-3xl p-4 shadow-sm">
+        <p className="font-extrabold text-cb-marrom text-xl text-center">Pague com Pix</p>
         {pixDin.estado === "pronto" && pixDin.qrData && (
           <>
-            <div className="bg-white p-2 rounded-xl border border-cb-marrom/10">
-              <QRCodeSVG value={pixDin.qrData} size={tamanhoQr} marginSize={2} level="M" />
+            <div className="bg-white p-1 rounded-xl border border-cb-marrom/10" style={{ width: "clamp(220px, 32vh, 280px)", height: "clamp(220px, 32vh, 280px)" }}>
+              <QRCodeSVG value={pixDin.qrData} size={tamanhoQr} marginSize={2} level="M" style={{ width: "100%", height: "100%" }} />
             </div>
-            <p className="text-cb-amber font-extrabold text-3xl">{formatarMoeda(totalValor)}</p>
-            <p className="text-cb-marrom font-bold text-lg text-center">Escaneie com o app do seu banco</p>
+            <p className="text-cb-amber font-extrabold text-2xl leading-tight">{formatarMoeda(totalValor)}</p>
+            <p className="text-cb-marrom font-bold text-base text-center">Escaneie com o app do seu banco</p>
             <button
               onClick={async function() {
                 playClick();
                 if (pixDin.qrData && await copiarTexto(pixDin.qrData)) { setDinCopiado(true); setTimeout(function() { setDinCopiado(false); }, 3000); }
               }}
-              className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem"
+              className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-2 px-6 rounded-2xl touch-manipulation btn-totem"
             >
               {dinCopiado ? "✓ Código copiado" : "Copiar código Pix"}
             </button>
@@ -677,14 +677,14 @@ export default function Pagamento() {
     if (!visivel) return dinamico;
     var reserva = PIX_DINAMICO_ATIVO;
     return (
-      <div className="w-full flex flex-col gap-4">
+      <div className="w-full flex flex-col gap-3">
       {dinamico}
-      <div className="w-full flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
+      <div className="w-full flex flex-col items-center gap-2 bg-white rounded-3xl p-4 shadow-sm">
         {reserva && <p className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-3 py-1">Pix reserva (chave CNPJ)</p>}
-        {!reserva && <p className="font-extrabold text-cb-marrom text-2xl text-center">Pague com Pix</p>}
+        {!reserva && <p className="font-extrabold text-cb-marrom text-xl text-center">Pague com Pix</p>}
         {pixPayload ? (
-          <div className="bg-white p-2 rounded-xl border border-cb-marrom/10">
-            <QRCodeSVG value={pixPayload} size={mobile ? 240 : 300} marginSize={2} level="M" />
+          <div className="bg-white p-1 rounded-xl border border-cb-marrom/10" style={{ width: "clamp(220px, 32vh, 280px)", height: "clamp(220px, 32vh, 280px)" }}>
+            <QRCodeSVG value={pixPayload} size={tamanhoQr} marginSize={2} level="M" style={{ width: "100%", height: "100%" }} />
           </div>
         ) : (
           <div className="flex items-center gap-3 text-cb-marrom/60 text-sm py-16">
@@ -692,24 +692,24 @@ export default function Pagamento() {
             <span>Gerando QR Pix…</span>
           </div>
         )}
-        <p className="text-cb-amber font-extrabold text-3xl">{formatarMoeda(totalValor)}</p>
-        <p className="text-cb-marrom font-bold text-lg text-center">Escaneie com o app do seu banco</p>
+        <p className="text-cb-amber font-extrabold text-2xl leading-tight">{formatarMoeda(totalValor)}</p>
+        <p className="text-cb-marrom font-bold text-base text-center">Escaneie com o app do seu banco</p>
         <button
           disabled={!pixPayload}
           onClick={async function() {
             playClick();
             if (pixPayload && await copiarTexto(pixPayload)) { setPixCopiado(true); setTimeout(function() { setPixCopiado(false); }, 3000); }
           }}
-          className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem disabled:opacity-50"
+          className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-2 px-6 rounded-2xl touch-manipulation btn-totem disabled:opacity-50"
         >
           {pixCopiado ? "✓ Código copiado" : "Copiar código Pix"}
         </button>
-        <p className="text-sm font-bold text-amber-800 bg-amber-50 rounded-xl px-4 py-2 text-center">
+        <p className="text-xs font-bold text-amber-800 bg-amber-50 rounded-xl px-3 py-1 text-center">
           Após pagar, mostre o comprovante ao atendente
         </p>
         <button
           onClick={function() { playClick(); pixManualRef.current = true; setModalPix(true); setModalManual(true); }}
-          className="w-full bg-cb-confirma text-white font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem"
+          className="w-full bg-cb-confirma text-white font-bold text-base py-2 px-6 rounded-2xl touch-manipulation btn-totem"
         >
           Atendente: confirmar Pix recebido
         </button>
@@ -724,26 +724,26 @@ export default function Pagamento() {
     return (
       <div className="h-full flex flex-col animate-fadeIn">
         <HeaderTotem />
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
-          <div className={"w-full mx-auto " + (ehPix && !mobile ? "max-w-5xl grid grid-cols-2 gap-6 items-start" : "max-w-xl flex flex-col items-center gap-4")}>
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
+          <div className={"w-full mx-auto " + (ehPix && !mobile ? "max-w-5xl grid grid-cols-2 gap-6 items-start" : "max-w-xl flex flex-col items-center gap-3")}>
             {ehPix && mobile && painelPix()}
 
-            <div className="flex flex-col items-center gap-4">
-              <h1 className="font-sans font-extrabold text-3xl text-cb-marrom text-center">
+            <div className="flex flex-col items-center gap-3">
+              <h1 className="font-sans font-extrabold text-2xl text-cb-marrom text-center">
                 {ehPix ? "Pagamento Pix ou Maquininha" : "Pagamento na Maquininha"}
               </h1>
               <p className="text-cb-marrom/60 text-lg">
                 Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
               </p>
 
-              <div className="flex flex-col items-center gap-4 bg-white rounded-3xl p-8 shadow-sm">
+              <div className="flex flex-col items-center gap-2 bg-white rounded-3xl p-4 shadow-sm">
                 {/* Ícone animado */}
-                <div className="relative w-28 h-28 flex items-center justify-center">
-                  <span className="text-7xl">🖥️</span>
-                  <span className="absolute -bottom-1 -right-1 text-3xl animate-bounce">💳</span>
+                <div className="relative w-16 h-16 flex items-center justify-center">
+                  <span className="text-5xl">🖥️</span>
+                  <span className="absolute -bottom-1 -right-1 text-2xl animate-bounce">💳</span>
                 </div>
 
-                <p className="font-extrabold text-cb-marrom text-2xl text-center">
+                <p className="font-extrabold text-cb-marrom text-xl text-center">
                   {ehPix ? "Ou pague com cartão na maquininha" : "Conclua o pagamento na maquininha"}
                 </p>
                 <p className="text-cb-marrom/50 text-sm text-center">
