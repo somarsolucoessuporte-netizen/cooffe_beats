@@ -38,8 +38,8 @@ async function criarIntegral(req: NextRequest) {
       metodo === "PIX"           ? "PIX" :
       metodo === "CARTAO_DEBITO" ? "CARTAO_DEBITO" : "CARTAO_CREDITO";
 
-    // Tipo enviado à Point API: PIX → "qr"; cartão → sem tipo (a maquineta mostra o menu débito/crédito)
-    const tipoPoint = metodoPagamento === "PIX" ? "qr" : undefined;
+    // Nenhum type é enviado à Point: a maquineta mostra o menu completo (débito, crédito, Pix)
+    // e o cliente escolhe nela. Enviar "qr" fazia a Point cancelar a intenção sem exibir o QR.
 
     const deviceId = await obterDevicePoint();
     await liberarPointDeCobrancasAnteriores(deviceId, pedidoId);
@@ -48,7 +48,6 @@ async function criarIntegral(req: NextRequest) {
       referencia,
       descricao: descricao ?? "",
       deviceId,
-      tipo: tipoPoint,
     });
 
     await prisma.pagamento.create({
