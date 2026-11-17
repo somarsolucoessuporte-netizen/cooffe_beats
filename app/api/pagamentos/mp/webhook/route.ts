@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { verificarPagamentoPoint, consultarPagamentoMp, consultarOrderMp, validarAssinaturaWebhook } from "@/lib/mercadopago";
 import { aplicarResultadoMp, aplicarPagamentoCheckoutPro } from "@/lib/mp-pagamento";
 import { divisao, notificarQuitadas } from "@/lib/dividir-conta/runtime";
-import { resultadoPayment, resultadoIntent } from "@/lib/dividir-conta/mercadopago";
+import { resultadoPayment, resultadoIntent, resultadoOrder } from "@/lib/dividir-conta/mercadopago";
 import { referenciaDividida } from "@/lib/dividir-conta/guards";
 
 /**
@@ -37,6 +37,13 @@ export async function POST(req: NextRequest) {
     // (aplicarResultadoMp é idempotente).
     if (topico === "order" || topico === "orders") {
       const resultado = await consultarOrderMp(String(id));
+      if (resultado.referencia && await referenciaDividida(resultado.referencia)) {
+        // Parcela da divisão de conta paga por Pix QR: resultado completo (pago, cancelado ou expirado)
+        const completo = await resultadoOrder(String(id));
+        await divisao.receber(completo, `webhook:${String(id)}:${JSON.stringify(completo)}`);
+        await notificarQuitadas().catch(() => {});
+        return Response.json({ ok: true });
+      }
       if (resultado.status === "PAID" && resultado.referencia) {
         await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", pixQr: true, ...resultado, evento: body }, "qr");
       }

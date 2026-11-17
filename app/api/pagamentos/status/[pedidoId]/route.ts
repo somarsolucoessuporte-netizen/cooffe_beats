@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { reconciliarPagamentoMp } from "@/lib/mp-pagamento";
-import { db, estruturaPronta } from "@/lib/dividir-conta/database";
+import { db, estruturaPronta, habilitada } from "@/lib/dividir-conta/database";
 
 // Reconsulta na API do Mercado Pago no máximo a cada 6s por pedido (o polling roda a cada 2s)
 const INTERVALO_RECONCILIAR_MS = 6000;
@@ -15,14 +15,17 @@ export async function GET(
   { params }: { params: Promise<{ pedidoId: string }> },
 ) {
   const { pedidoId } = await params;
-  if (await estruturaPronta()) {
+  // When disabled, the integral status endpoint follows its historical path
+  // without querying split tables. Existing split attempts keep their dedicated
+  // status, webhook, and authenticated recovery paths.
+  if (habilitada() && await estruturaPronta()) {
     const [conta] = await db.query<{ status: string }>(`SELECT status FROM "ContaDividida" WHERE "pedidoId"=$1`, [pedidoId]);
     if (conta) return NextResponse.json({ ok: true, dividido: true, status: conta.status === "QUITADA" ? "APROVADO" : "PENDENTE" }, { headers: { "Cache-Control": "no-store" } });
   }
 
   let pagamento = await prisma.pagamento.findUnique({
     where:  { pedidoId },
-    select: { status: true, referencia: true, payload: true },
+    select: { status: true, referencia: true, payload: true, pixOrderId: true },
   });
 
   if (!pagamento) {
@@ -36,7 +39,7 @@ export async function GET(
       await reconciliarPagamentoMp(pagamento);
       pagamento = await prisma.pagamento.findUnique({
         where:  { pedidoId },
-        select: { status: true, referencia: true, payload: true },
+        select: { status: true, referencia: true, payload: true, pixOrderId: true },
       }) ?? pagamento;
     } catch (e) {
       console.warn("[Status] reconciliação MP falhou:", e instanceof Error ? e.message : e);

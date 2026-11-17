@@ -6,7 +6,7 @@ type Handler = (req: Request, context?: unknown) => Promise<Response>;
 
 // Compile the ACTUAL route into a VM with an explicit dependency allowlist.
 // No Next server, Prisma client, dotenv, sockets or application credentials.
-export async function carregarRota(file: string, mocks: Record<string, unknown>) {
+export async function carregarRota(file: string, mocks: Record<string, unknown>, env: Record<string, string> = {}) {
   const source = await readFile(file, "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -15,7 +15,7 @@ export async function carregarRota(file: string, mocks: Record<string, unknown>)
   const sandboxModule = { exports: {} as Record<string, Handler> };
   const context = createContext({
     module: sandboxModule, exports: sandboxModule.exports, Response, Request, URL, Buffer, Error,
-    process: { env: { DIVIDIR_CONTA_ENABLED: "false", SUMUP_MERCHANT_CODE: "merchant-test" } },
+    process: { env: { DIVIDIR_CONTA_ENABLED: "false", SUMUP_MERCHANT_CODE: "merchant-test", ...env } },
     console: { warn() {}, error() {}, log() {} },
     require(name: string) {
       if (name === "next/server") return { NextResponse: { json: Response.json.bind(Response) } };

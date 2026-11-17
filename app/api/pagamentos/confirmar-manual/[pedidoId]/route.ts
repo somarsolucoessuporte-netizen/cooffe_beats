@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
 import { protegerPedido } from "@/lib/dividir-conta/guards";
-import { cancelarPagamentoPoint } from "@/lib/mercadopago";
+import { cancelarPagamentoPoint, cancelarOrderMp } from "@/lib/mercadopago";
 import { PIX_CHAVE_CNPJ, PIX_COMPROVANTE } from "@/lib/pix-estatico";
 
 const Schema = z.object({
@@ -37,7 +37,7 @@ export async function POST(
 
     const pedido = await prisma.pedido.findUnique({
       where:  { id: pedidoId },
-      select: { status: true, total: true, pagamento: { select: { status: true, payload: true } } },
+      select: { status: true, total: true, pagamento: { select: { status: true, payload: true, pixOrderId: true } } },
     });
 
     if (!pedido) {
@@ -90,6 +90,9 @@ export async function POST(
     }
 
     await liberarPedidoPago(pedidoId);
+
+    // Pix recebido pela chave CNPJ: a order do QR dinâmico não pode mais ser paga (segundo plano)
+    if (pixCnpj && pedido.pagamento?.pixOrderId) void cancelarOrderMp(pedido.pagamento.pixOrderId);
 
     // Pix recebido: a cobrança pendente na maquineta não pode mais ser paga (segundo plano, só loga erro)
     if (pixCnpj && payloadAnterior?.paymentIntentId && payloadAnterior.deviceId) {

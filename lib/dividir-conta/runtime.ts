@@ -4,7 +4,7 @@ import { db, habilitada, estruturaPronta } from "./database";
 import { criarServico } from "./service";
 import { mercadoPagoDivisao } from "./mercadopago";
 
-export const divisao = criarServico(db, mercadoPagoDivisao, habilitada);
+export const divisao = criarServico(db, mercadoPagoDivisao, habilitada, () => process.env.MP_DEVICE_ID);
 
 // Retried by status queries, webhooks and the authenticated recovery endpoint.
 // Financial settlement/stock are already committed; broadcasting is safe to repeat.
@@ -19,7 +19,8 @@ export async function notificarQuitadas() {
 }
 
 export async function recuperarDivisoes() {
-  if (!await estruturaPronta()) return;
-  await divisao.recuperarTudo();
+  if (!await estruturaPronta()) return { eventosRevistos: 0, tentativasConsultadas: 0, resultadosIdentificados: 0, aindaIndeterminadas: 0, falhasConsulta: 0 };
+  const resultado = await divisao.recuperarTudo();
   await notificarQuitadas();
+  return resultado;
 }

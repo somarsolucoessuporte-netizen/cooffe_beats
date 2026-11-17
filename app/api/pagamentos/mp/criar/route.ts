@@ -50,16 +50,16 @@ async function criarIntegral(req: NextRequest) {
       deviceId,
     });
 
-    await prisma.pagamento.create({
-      data: {
-        pedidoId,
-        referencia,
-        status:  "PENDENTE",
-        valor,
-        metodo:  metodoPagamento,
-        payload: { provider: "mercadopago", paymentIntentId: intent.id, deviceId },
-      },
-    });
+    const payloadPoint = { provider: "mercadopago", paymentIntentId: intent.id, deviceId };
+    try {
+      await prisma.pagamento.create({
+        data: { pedidoId, referencia, status: "PENDENTE", valor, metodo: metodoPagamento, payload: payloadPoint },
+      });
+    } catch (e) {
+      // Pix: /mp/pix-qr (em paralelo) pode ter criado o Pagamento primeiro — só acrescenta a intenção da Point
+      if ((e as { code?: string }).code !== "P2002") throw e;
+      await prisma.pagamento.updateMany({ where: { pedidoId, status: "PENDENTE" }, data: { referencia, payload: payloadPoint } });
+    }
 
     return NextResponse.json({
       ok:   true,

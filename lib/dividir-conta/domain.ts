@@ -44,11 +44,19 @@ export interface Sql {
 export interface Database extends Sql {
   transaction<T>(fn: (tx: Sql) => Promise<T>): Promise<T>;
 }
+// Parcela paga por Pix QR na tela: o deviceId é "PIX_QR:<tentativa>" (índice único de tentativa ativa por device)
+// e o intentId guarda o id da order do Mercado Pago.
+export const PIX_QR = "PIX_QR:";
+export const ehPixQr = (deviceId: string | null | undefined) => !!deviceId && deviceId.startsWith(PIX_QR);
+
 export interface Provedor {
   criar(input: { referencia: string; valorCentavos: number; deviceId: string }): Promise<{ intentId: string }>;
-  consultar(input: { referencia: string; intentId: string | null }): Promise<Resultado | null>;
+  criarPix(input: { referencia: string; valorCentavos: number }): Promise<{ orderId: string; qrData: string }>;
+  consultar(input: { referencia: string; intentId: string | null; deviceId?: string }): Promise<Resultado | null>;
+  /** true = cancelada (ou já encerrada); false = não foi possível cancelar agora. Nunca lança. */
+  cancelar(input: { intentId: string | null; deviceId: string }): Promise<boolean>;
 }
 
 export type Conta = { id: string; pedidoId: string; empresaId: string; tokenHash: string; criacaoHash: string; total: number; status: string; fingerprint: string; requestHash: string; notificada: boolean };
 export type Parcela = { id: string; contaId: string; ordem: number; valor: number; status: string };
-export type Tentativa = { id: string; parcelaId: string; contaId: string; chave: string; referencia: string; deviceId: string; intentId: string | null; paymentId: string | null; status: EstadoTentativa; valor: number; metodo: string | null };
+export type Tentativa = { id: string; parcelaId: string; contaId: string; chave: string; referencia: string; deviceId: string; intentId: string | null; paymentId: string | null; status: EstadoTentativa; valor: number; metodo: string | null; qrData?: string | null; criadoEm?: Date | string };

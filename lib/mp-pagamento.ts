@@ -1,6 +1,6 @@
 import type { MetodoPagamento, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { verificarPagamentoPoint, cancelarOrderMp, cancelarPaymentIntentPoint, type ResultadoPagamentoMp } from "@/lib/mercadopago";
+import { verificarPagamentoPoint, consultarOrderMp, cancelarOrderMp, cancelarPaymentIntentPoint, type ResultadoPagamentoMp } from "@/lib/mercadopago";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
 import { criarPedidoDaSessao } from "@/lib/checkout-sessao";
 
@@ -117,15 +117,31 @@ async function cancelarOutroMeio(
   await Promise.allSettled(tarefas);
 }
 
-/** Reconsulta na API a intenção Point de um Pagamento pendente e grava o resultado. */
-export async function reconciliarPagamentoMp(pagamento: { referencia: string | null; payload: unknown }) {
+/**
+ * Reconsulta na API o Pagamento pendente: a order do Pix QR da tela e/ou a intenção da Point
+ * (cada uma pode ser o meio que o cliente usou) e grava o resultado.
+ */
+export async function reconciliarPagamentoMp(pagamento: { referencia: string | null; payload: unknown; pixOrderId?: string | null }) {
   const mp = pagamento.payload as PayloadMp | null;
-  if (!pagamento.referencia || mp?.provider !== "mercadopago" || !mp.paymentIntentId) return;
+  if (!pagamento.referencia || mp?.provider !== "mercadopago") return;
 
+  if (pagamento.pixOrderId) {
+    try {
+      const order = await consultarOrderMp(pagamento.pixOrderId);
+      if (order.status === "PAID") {
+        await aplicarResultadoMp(pagamento.referencia, order, { provider: "mercadopago", pixQr: true, ...order }, "qr");
+        return;
+      }
+    } catch (e) {
+      console.warn("[MP reconciliar] order QR:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  if (!mp.paymentIntentId) return;
   const resultado = await verificarPagamentoPoint(mp.paymentIntentId);
   await aplicarResultadoMp(pagamento.referencia, resultado, {
     provider: "mercadopago", deviceId: mp.deviceId, ...resultado, paymentIntentId: mp.paymentIntentId,
- }, "point");
+  }, "point");
 }
 
 /**

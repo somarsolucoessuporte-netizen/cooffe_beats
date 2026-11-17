@@ -9,6 +9,7 @@ import { mercadoPagoDivisao, resultadoPayment } from "../../lib/dividir-conta/me
 import { criarPagamentoPoint } from "../../lib/mercadopago";
 import { carregarRota, requisicao } from "./route-harness";
 import { centavos, dividirIgualmente, validarParcelas } from "../../lib/dividir-conta/domain";
+import { cobrarComReconsulta, RequestError, encerrarAtendimentoDivisao } from "../../lib/dividir-conta/client";
 import type { Database, Provedor, Resultado, Sql, Tentativa } from "../../lib/dividir-conta/domain";
 
 // No Prisma, .env, Supabase, Next server, sockets or real payment provider.
@@ -20,10 +21,15 @@ let enabled = true;
 let creates = 0;
 let failCreate = false;
 let consulta: Resultado | null = null;
+let consultas = 0;
+let cancelamentos = 0;
+let cancelOk = true;
 const token = "a".repeat(64);
 const provider: Provedor = {
   async criar() { creates++; if (failCreate) throw new Error("accepted remotely, response lost"); return { intentId: `intent-${creates}` }; },
-  async consultar() { return consulta; },
+  async consultar() { consultas++; return consulta; },
+  async criarPix() { creates++; if (failCreate) throw new Error("mp fora do ar"); return { orderId: `order-${creates}`, qrData: `000201-qr-${creates}` }; },
+  async cancelar() { cancelamentos++; return cancelOk; },
 };
 let service: ReturnType<typeof criarServico>;
 const originalFetch = globalThis.fetch;
@@ -42,6 +48,7 @@ before(async () => {
   await pg.exec(`SET search_path=pg_catalog`);
   await pg.exec(await readFile("prisma/migrations/20261110000000_dividir_conta/migration.sql", "utf8"));
   await pg.exec(`SET search_path=public`);
+  await pg.exec(await readFile("prisma/migrations/20261117190000_divisao_tentativa_pix_qr/migration.sql", "utf8"));
   globalThis.fetch = async () => { throw new Error("External network forbidden in isolated tests"); };
   process.env.MP_ACCESS_TOKEN = "TEST-ONLY-NOT-A-CREDENTIAL";
 });
@@ -57,7 +64,7 @@ beforeEach(async () => {
     INSERT INTO insumos (id,"empresaId",nome,unidade,"estoqueAtual","estoqueMinimo",custo,"updatedAt") VALUES ('insumo','empresa','Teste','un',10,0,2,CURRENT_TIMESTAMP);
     INSERT INTO ficha_tecnica_itens (id,"produtoId","insumoId",quantidade) VALUES ('ficha','produto','insumo',1);
     DELETE FROM "DivisaoOperacaoLegada";`);
-  enabled = true; creates = 0; failCreate = false; consulta = null;
+  enabled = true; creates = 0; failCreate = false; consulta = null; consultas = 0; cancelamentos = 0; cancelOk = true;
   service = criarServico(db, provider, () => enabled);
   globalThis.fetch = async () => { throw new Error("External network forbidden in isolated tests"); };
 });
@@ -145,6 +152,21 @@ test("timeout mantém reserva e não reenvia nem com outra chave", async () => {
   await charge(c.id,c.parcelas[0].id);
   assert.equal(creates,1);
   assert.equal((await service.resumo(c.id,token)).saldo,1000);
+});
+
+test("timeout seguido de recuperação concorrente mantém reserva até webhook atrasado", async () => {
+  const c = await draft(); failCreate = true;
+  const t = await charge(c.id,c.parcelas[0].id);
+  assert.equal(t.status,"DESCONHECIDO");
+  failCreate = false;
+  const [a,b] = await Promise.all([service.recuperarTudo(),service.recuperarTudo()]);
+  assert.equal(consultas,1,"a reivindicação persistente impede duas consultas concorrentes");
+  assert.equal(a.tentativasConsultadas+b.tentativasConsultadas,1);
+  assert.equal(creates,1,"recuperação nunca repete a criação da cobrança");
+  assert.equal((await service.resumo(c.id,token)).reservado,334);
+  await Promise.all([service.receber(paid(t),"webhook-atrasado"),service.receber(paid(t),"webhook-atrasado")]);
+  const r=await service.resumo(c.id,token);
+  assert.equal(r.pago,334);assert.equal(r.reservado,0);assert.equal(creates,1);
 });
 
 test("webhooks duplicados não contabilizam duas vezes", async () => {
@@ -241,6 +263,80 @@ test("operação legada em voo impede reserva de parcela", async () => {
   assert.equal(creates,0);
 });
 
+async function pagamentoPendentePoint(payload: unknown, id = "pendente", idade = "30 days") {
+  await db.query(`INSERT INTO "Pedido" (id,"empresaId",senha,subtotal,total,"atualizadoEm") VALUES ($1,'empresa',$1,10,10,CURRENT_TIMESTAMP) RETURNING id`, [id]);
+  await db.query(`INSERT INTO "Pagamento" (id,"pedidoId",metodo,valor,status,payload,"criadoEm") VALUES ($1,$1,'PIX',10,'PENDENTE',$2::jsonb,CURRENT_TIMESTAMP - $3::interval) RETURNING id`, [id, JSON.stringify(payload), idade]);
+}
+
+test("409: cinco pendências históricas sem Point não bloqueiam parcelas 400/600 nem são alteradas", async () => {
+  for (let i = 0; i < 5; i++) await pagamentoPendentePoint(null, `historico-${i}`);
+  const id = await service.criar({ ...input(), valores: [400,600] });
+  const c = await service.resumo(id,token);
+  assert.equal(c.bloqueioCobranca,null);
+  const chave = randomUUID();
+  await Promise.all([service.cobrar(id,token,c.parcelas[0].id,chave,"point"),service.cobrar(id,token,c.parcelas[0].id,chave,"point")]);
+  assert.equal(creates,1);
+  const atual = await service.resumo(id,token);
+  assert.equal(atual.pago,0); assert.equal(atual.saldo,1000); assert.equal(atual.reservado,400);
+  assert.equal(atual.bloqueioCobranca,"PARCELA_EM_ANDAMENTO");
+  await assert.rejects(service.cobrar(id,token,c.parcelas[1].id,randomUUID(),"point"),/andamento/);
+  assert.equal(creates,1);
+  assert.equal((await db.query(`SELECT id FROM "Pagamento" WHERE status='PENDENTE' AND payload='null'::jsonb`)).length,5);
+});
+
+test("409: Point integral do mesmo terminal bloqueia enquanto recente e libera após 6 min", async () => {
+  await pagamentoPendentePoint({provider:"mercadopago",deviceId:"point",paymentIntentId:"velha"},"velha","30 days");
+  await pagamentoPendentePoint({provider:"mercadopago",deviceId:"point",paymentIntentId:"intent-integral"},"pendente","1 minute");
+  service = criarServico(db,provider,()=>true,()=>"point");
+  const c = await draft();
+  assert.equal(c.bloqueioCobranca,"POINT_INTEGRAL_PENDENTE");
+  await assert.rejects(charge(c.id,c.parcelas[0].id),/andamento/);
+  assert.equal(creates,0); assert.equal((await service.resumo(c.id,token)).reservado,0);
+  assert.equal((await db.query(`SELECT id FROM "Pagamento" WHERE status='PENDENTE'`)).length,2);
+  // sem a pendência recente, a antiga sozinha não prende mais a tela
+  await db.query(`DELETE FROM "Pagamento" WHERE id='pendente' RETURNING id`);
+  assert.equal((await service.resumo(c.id,token)).bloqueioCobranca,null);
+});
+
+test("409: Point sem device ou sem provider explícito conserva proteção", async () => {
+  const c = await draft();
+  for (const payload of [{provider:"mercadopago",paymentIntentId:"intent"},{paymentIntentId:"intent",deviceId:"point"}]) {
+    await db.query(`DELETE FROM "Pagamento" RETURNING id`);
+    await db.query(`DELETE FROM "Pedido" WHERE id='pendente' RETURNING id`);
+    await pagamentoPendentePoint(payload,"pendente","1 minute");
+    await assert.rejects(charge(c.id,c.parcelas[0].id),/andamento/);
+    assert.equal(creates,0);
+  }
+});
+
+test("409: Point de outro terminal e Checkout Pro não reservam esta Point", async () => {
+  await pagamentoPendentePoint({provider:"mercadopago",deviceId:"outro",paymentIntentId:"outra-point"},"outra");
+  await pagamentoPendentePoint({provider:"mercadopago",checkoutPro:true},"online");
+  service = criarServico(db,provider,()=>true,()=>"point");
+  const c = await draft();
+  assert.equal(c.bloqueioCobranca,null);
+  await charge(c.id,c.parcelas[0].id);
+  assert.equal(creates,1);
+  assert.equal((await db.query(`SELECT id FROM "Pagamento" WHERE status='PENDENTE'`)).length,2);
+});
+
+test("409: reconsulta cliente mostra reserva real e nunca reenvia POST", async () => {
+  const c = await draft(); failCreate = true;
+  await charge(c.id,c.parcelas[0].id);
+  let posts = 0; let gets = 0;
+  const resultado = await cobrarComReconsulta(async()=>{posts++;throw new RequestError("Há pagamento em andamento",409);},async()=>{gets++;return service.resumo(c.id,token);});
+  assert.equal(posts,1); assert.equal(gets,1); assert.equal(creates,1);
+  assert.equal(resultado.conflito,true); assert.equal(resultado.conta.pago,0);
+  assert.equal(resultado.conta.reservado,334); assert.equal(resultado.conta.saldo,1000);
+  assert.equal(resultado.conta.bloqueioCobranca,"PARCELA_EM_ANDAMENTO");
+});
+
+test("409: falha de reconsulta não inventa estado nem tenta cobrar de novo", async () => {
+  let posts = 0; let gets = 0;
+  await assert.rejects(cobrarComReconsulta(async()=>{posts++;throw new RequestError("Conflito",409);},async()=>{gets++;throw new Error("consulta indisponível");}),/consulta indisponível/);
+  assert.equal(posts,1); assert.equal(gets,1); assert.equal(creates,0);
+});
+
 test("evento persistido é recuperado após falha transacional", async () => {
   const c = await draft(); const t = await charge(c.id,c.parcelas[0].id);
   let fail = true;
@@ -276,13 +372,84 @@ test("guardas preservam integral antes da migration e para pedido comum", async 
   assert.equal((await db.query(`SELECT id FROM "DivisaoOperacaoLegada"`)).length,0);
 });
 
-test("guardas bloqueiam pedido vinculado e terminal antes da chamada externa", async () => {
+test("flag desligada preserva integral sem schema de divisão",async()=>{
+  let estrutura=0;let banco=0;let integral=0;
+  const semSchema:Database={
+    query:async()=>{banco++;throw new Error("split table query must not occur without schema");},
+    transaction:async()=>{banco++;throw new Error("split transaction must not occur");},
+  };
+  const guards=criarGuardas(semSchema,async()=>{estrutura++;return false;},()=>false);
+  assert.equal(await guards.protegerPedido("pedido-integral"),null);
+  const response=await guards.executarLegado(async()=>{integral++;return Response.json({ok:true});});
+  assert.equal(response.status,200);assert.equal(integral,1);assert.equal(estrutura,1);assert.equal(banco,0);
+});
+
+test("flag desligada consulta apenas existência e preserva caminho integral sem reserva",async()=>{
+  let consultas=0;let transacoes=0;let integral=0;
+  const banco:Database={
+    query:async(sql)=>{consultas++;assert.match(sql,/FROM "ContaDividida" WHERE "pedidoId"=\$1 LIMIT 1/);return[];},
+    transaction:async()=>{transacoes++;throw new Error("integral must not reserve a split lease");},
+  };
+  const guards=criarGuardas(banco,async()=>true,()=>false);
+  const response=await guards.executarLegado(async()=>{
+    const bloqueio=await guards.protegerPedido("pedido-integral");
+    if(bloqueio)return bloqueio;
+    integral++;
+    return Response.json({ok:true});
+  });
+  assert.equal(response.status,200);assert.equal(integral,1);assert.equal(consultas,1);assert.equal(transacoes,0);
+});
+
+test("falha ao consultar divisão bloqueia integral antes de qualquer cobrança",async()=>{
+  let integral=0;
+  const semPermissao:Database={query:async()=>{throw new Error("permission denied");},transaction:async()=>{throw new Error("unexpected transaction");}};
+  const guards=criarGuardas(semPermissao,async()=>true,()=>false);
+  const response=await guards.executarLegado(async()=>{
+    const bloqueio=await guards.protegerPedido("pedido-integral");
+    if(bloqueio)return bloqueio;
+    integral++;
+    return Response.json({ok:true});
+  });
+  assert.equal(response.status,503);assert.equal(integral,0);
+});
+
+test("guardas bloqueiam integral do pedido dividido e permitem atendimento independente", async () => {
   const c = await draft(); const guards = criarGuardas(db,async()=>true);
   assert.equal((await guards.protegerPedido(c.pedidoId))?.status,409);
   await charge(c.id,c.parcelas[0].id);
   let chamou = false;
-  const resposta = await guards.executarLegado(async()=>{ chamou=true; return Response.json({ok:true}); });
+  const resposta = await guards.executarLegado(async()=>{ const bloqueio=await guards.protegerPedido(c.pedidoId); if(bloqueio)return bloqueio; chamou=true; return Response.json({ok:true}); });
   assert.equal(resposta.status,409); assert.equal(chamou,false);
+  const independente = await guards.executarLegado(async()=>{ const bloqueio=await guards.protegerPedido("novo-pedido"); if(bloqueio)return bloqueio; chamou=true; return Response.json({ok:true}); });
+  assert.equal(independente.status,200); assert.equal(chamou,true);
+  assert.equal((await service.resumo(c.id,token)).reservado,334);
+});
+
+test("encerrar atendimento arquiva somente a sessão ativa e preserva divisão pendente",async()=>{
+  const c=await draft();await charge(c.id,c.parcelas[0].id);
+  const antes=await service.resumo(c.id,token);
+  const dados=new Map<string,string>([["cb_divisao_em_andamento",JSON.stringify({id:c.id,token})],["outro-atendimento","preservado"]]);
+  const arquivo=new Map<string,string>();
+  const storage={getItem:(k:string)=>dados.get(k)??null,setItem:(k:string,v:string)=>{dados.set(k,v);},removeItem:(k:string)=>{dados.delete(k);}};
+  encerrarAtendimentoDivisao(storage,{...storage,setItem:(k:string,v:string)=>{arquivo.set(k,v);}});
+  assert.equal(storage.getItem("cb_divisao_em_andamento"),null);
+  assert.equal(storage.getItem("outro-atendimento"),"preservado");
+  assert.equal(JSON.parse(arquivo.get(`cb_divisao_em_andamento_atendimento_${c.id}`)!).id,c.id);
+  assert.deepEqual(await service.resumo(c.id,token),antes);assert.equal(creates,1);
+});
+
+test("novo pedido integral não é bloqueado pela divisão anterior e não altera sua tentativa",async()=>{
+  const c=await draft();await charge(c.id,c.parcelas[0].id);await pedidoComum();
+  let point=0;const guards=criarGuardas(db,async()=>true);
+  const route=await carregarRota("app/api/pagamentos/mp/criar/route.ts",{
+    "@/lib/prisma":{prisma:prismaLegado()},"@/lib/dividir-conta/guards":guards,
+    "@/lib/mp-pagamento":{reconciliarPagamentoMp:async()=>{}},
+    "@/lib/mercadopago":{obterDevicePoint:async()=>"point",cancelarPagamentoPoint:async()=>{throw new Error("não deve cancelar a divisão");},criarPagamentoPoint:async()=>{point++;return{id:"intent-novo-simulado",state:"OPEN"};}},
+  });
+  assert.equal((await route.POST(requisicao({pedidoId:"comum",referencia:"NOVO",metodo:"PIX"}))).status,200);
+  assert.equal(point,1);
+  assert.equal((await route.POST(requisicao({pedidoId:c.pedidoId,referencia:"DUPLICADO",metodo:"PIX"}))).status,409);
+  assert.equal(point,1);assert.equal((await service.resumo(c.id,token)).reservado,334);
 });
 
 test("corrida entre integral e parcial mantém exclusão sem transação remota", async () => {
@@ -393,11 +560,106 @@ test("divisão sem tentativa pode ser cancelada sem apagar consumo ou impedir ca
   await db.query(`UPDATE caixas SET status='FECHADO' WHERE id='caixa' RETURNING id`);
 });
 
-test("divisão com qualquer tentativa não pode ser cancelada pelo cliente", async () => {
+test("cancelar divisão funciona com cobrança pendente: cancela no MP e cancela a conta/pedido", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+  consulta=null;
+  const r=await service.cancelar(c.id,token);
+  assert.equal(r.cancelada,true); assert.equal(cancelamentos,1);
+  assert.equal((await db.query<{status:string}>(`SELECT status FROM "Pedido" WHERE id=$1`,[c.pedidoId]))[0].status,"CANCELADO");
+  assert.equal((await db.query<{status:string}>(`SELECT status FROM "TentativaParcela"`))[0].status,"RECUSADO");
+});
+
+test("cancelar divisão preserva parcela já paga e devolve o saldo restante", async () => {
   const c=await draft(); const t=await charge(c.id,c.parcelas[0].id);
-  await assert.rejects(service.cancelar(c.id,token),/iniciou cobrança/);
-  await service.receber({referencia:t.referencia,status:"FAILED"},"recusa");
-  await assert.rejects(service.cancelar(c.id,token),/iniciou cobrança/);
+  await service.receber(paid(t),"pago-1");
+  const r=await service.cancelar(c.id,token);
+  assert.equal(r.cancelada,false); assert.equal(r.pago,334); assert.equal(r.saldo,666);
+  assert.equal((await service.resumo(c.id,token)).status,"ABERTA");
+});
+
+test("cancelar divisão não cancela a conta se o MP não confirmou o cancelamento (nunca libera cobrança possivelmente paga)", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+  cancelOk=false;
+  const r=await service.cancelar(c.id,token);
+  assert.equal(r.cancelada,false); assert.equal(r.pendentes,1);
+});
+
+test("'Cancelar esse pagamento' cancela a tentativa ativa no MP e libera a parcela", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+  const r=await service.cancelarPagamento(c.id,token);
+  assert.equal(r.reservado,0); assert.equal(r.naoCancelados,0); assert.equal(cancelamentos,1);
+  await charge(c.id,c.parcelas[0].id); assert.equal(creates,2);
+});
+
+test("tentativa vencida (Point > 8 min) é encerrada automaticamente e deixa de bloquear", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+  await db.query(`UPDATE "TentativaParcela" SET "criadoEm"=CURRENT_TIMESTAMP - INTERVAL '9 minutes' RETURNING id`);
+  const r=await service.reconciliar(c.id,token);
+  assert.equal(r.reservado,0); assert.equal(r.bloqueioCobranca,null); assert.equal(cancelamentos,1);
+  await charge(c.id,c.parcelas[0].id); assert.equal(creates,2);
+});
+
+test("tentativa vencida que foi paga nesse meio tempo vira pagamento, não é liberada", async () => {
+  const c=await draft(); const t=await charge(c.id,c.parcelas[0].id);
+  await db.query(`UPDATE "TentativaParcela" SET "criadoEm"=CURRENT_TIMESTAMP - INTERVAL '9 minutes' RETURNING id`);
+  consulta=paid(t);
+  const r=await service.reconciliar(c.id,token);
+  assert.equal(r.pago,334); assert.equal(cancelamentos,0);
+});
+
+test("tentativa vencida sem confirmação de cancelamento mantém a reserva", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+  await db.query(`UPDATE "TentativaParcela" SET "criadoEm"=CURRENT_TIMESTAMP - INTERVAL '9 minutes' RETURNING id`);
+  cancelOk=false;
+  assert.equal((await service.reconciliar(c.id,token)).reservado,334);
+});
+
+test("lease legada recente bloqueia e lease antiga (> 3 min) não prende mais a tela", async () => {
+  const c=await draft();
+  await db.query(`INSERT INTO "DivisaoOperacaoLegada" (id,"criadoEm") VALUES ('velha',CURRENT_TIMESTAMP - INTERVAL '10 minutes') RETURNING id`);
+  assert.equal((await service.resumo(c.id,token)).bloqueioCobranca,null);
+  await charge(c.id,c.parcelas[0].id); assert.equal(creates,1);
+});
+
+test("Pix QR da parcela: valor vem do banco, guarda order e QR, não bloqueia a Point e fecha por pagamento da order", async () => {
+  const c=await draft();
+  const r=await service.cobrarPix(c.id,token,c.parcelas[0].id,randomUUID());
+  assert.equal(r.pix.length,1); assert.equal(r.pix[0].valor,334); assert.match(r.pix[0].qrData,/^000201/);
+  assert.equal(r.reservado,334);
+  // a Point continua livre para outra parcela
+  await charge(c.id,c.parcelas[1].id);
+  const t=(await db.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "deviceId" LIKE 'PIX_QR:%'`))[0];
+  assert.equal(t.intentId,"order-1");
+  await service.receber({referencia:t.referencia,status:"PAID",paymentId:"pay-qr",valorCentavos:334,moeda:"BRL",metodo:"PIX",intentId:"order-1"},"order-paga");
+  assert.equal((await service.resumo(c.id,token)).pago,334);
+});
+
+test("Pix QR da parcela: falha do MP não deixa reserva presa e a parcela volta a ficar disponível", async () => {
+  const c=await draft(); failCreate=true;
+  await assert.rejects(service.cobrarPix(c.id,token,c.parcelas[0].id,randomUUID()),/QR Pix/);
+  failCreate=false;
+  assert.equal((await service.resumo(c.id,token)).reservado,0);
+  await service.cobrarPix(c.id,token,c.parcelas[0].id,randomUUID());
+});
+
+test("Pix estático da parcela: atendente confirma com o valor do banco e registra PIX_CNPJ_MANUAL", async () => {
+  const c=await draft();
+  const r=await service.confirmarPixManual(c.id,token,c.parcelas[0].id,randomUUID());
+  assert.equal(r.pago,334);
+  const t=(await db.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE status='APROVADO'`))[0];
+  assert.equal(t.metodo,"PIX_CNPJ_MANUAL"); assert.match(t.paymentId ?? "",/^manual-/);
+  await assert.rejects(service.confirmarPixManual(c.id,token,c.parcelas[0].id,randomUUID()),/indisponível/);
+});
+
+test("Pix estático da parcela cancela a cobrança da Point pendente antes de aprovar", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+  const r=await service.confirmarPixManual(c.id,token,c.parcelas[0].id,randomUUID());
+  assert.equal(r.pago,334); assert.equal(cancelamentos,1);
+});
+
+test("Pix estático da parcela: Point que não cancela impede a aprovação manual duplicada", async () => {
+  const c=await draft(); await charge(c.id,c.parcelas[0].id); cancelOk=false;
+  await assert.rejects(service.confirmarPixManual(c.id,token,c.parcelas[0].id,randomUUID()),/não pôde ser cancelada/);
 });
 
 test("retomada administrativa verifica empresa, gira token e não cria cobrança",async()=>{
@@ -456,14 +718,103 @@ test("rota MP integral preserva contrato com flag desligada antes e depois do SQ
   }
 });
 
-test("rota MP não chama terminal para pedido dividido mesmo com flag desligada",async()=>{
+test("rota MP integral mantém compatibilidade sem schema de divisão com flag desligada",async()=>{
+  await pedidoComum();let chamadas=0;
+  const semAcesso:Database={
+    query:async()=>{throw new Error("split table query is forbidden when disabled");},
+    transaction:async()=>{throw new Error("split table transaction is forbidden when disabled");},
+  };
+  const route=await carregarRota("app/api/pagamentos/mp/criar/route.ts",{
+    "@/lib/prisma":{prisma:prismaLegado()},
+    "@/lib/dividir-conta/guards":criarGuardas(semAcesso,async()=>false,()=>false),
+    "@/lib/mp-pagamento":{},
+    "@/lib/mercadopago":{obterDevicePoint:async()=>"point-integral",criarPagamentoPoint:async()=>{chamadas++;return{id:"intent-sem-divisao",state:"OPEN"};}},
+  });
+  const response=await route.POST(requisicao({pedidoId:"comum",referencia:"integral-sem-divisao",metodo:"PIX"}));
+  assert.equal(response.status,200);assert.equal(chamadas,1);
+  assert.deepEqual(await response.json(),{ok:true,data:{checkoutId:"intent-sem-divisao",readerId:"point-integral",metodo:"MAQUININHA",status:"OPEN"}});
+});
+
+test("rota MP integral sem divisão faz apenas leitura indexada quando schema existe",async()=>{
+  await pedidoComum();let chamadas=0;let consultas=0;let transacoes=0;
+  const semReserva:Database={
+    query:async(sql)=>{consultas++;assert.match(sql,/FROM "ContaDividida" WHERE "pedidoId"=\$1 LIMIT 1/);return[];},
+    transaction:async()=>{transacoes++;throw new Error("integral must not reserve a split lease");},
+  };
+  const route=await carregarRota("app/api/pagamentos/mp/criar/route.ts",{
+    "@/lib/prisma":{prisma:prismaLegado()},
+    "@/lib/dividir-conta/guards":criarGuardas(semReserva,async()=>true,()=>false),
+    "@/lib/mp-pagamento":{},
+    "@/lib/mercadopago":{obterDevicePoint:async()=>"point",criarPagamentoPoint:async()=>{chamadas++;return{id:"intent-integral",state:"OPEN"};}},
+  });
+  const response=await route.POST(requisicao({pedidoId:"comum",referencia:"integral-flag-off"}));
+  assert.equal(response.status,200);assert.equal(chamadas,1);assert.equal(consultas,1);assert.equal(transacoes,0);
+});
+
+test("status do pagamento integral com flag desligada mantém contrato sem consultar divisão",async()=>{
+  const route=await carregarRota("app/api/pagamentos/status/[pedidoId]/route.ts",{
+    "@/lib/prisma":{prisma:{pagamento:{findUnique:async()=>({status:"APROVADO",referencia:"CB-integral",payload:null})}}},
+    "@/lib/mp-pagamento":{reconciliarPagamentoMp:async()=>{throw new Error("approved payment should not reconcile");}},
+    "@/lib/dividir-conta/database":{
+      habilitada:()=>false,
+      estruturaPronta:async()=>{throw new Error("division schema lookup is forbidden when disabled");},
+      db:{query:async()=>{throw new Error("division query is forbidden when disabled");}},
+    },
+  });
+  const response=await route.GET(new Request("https://isolated.invalid/status"),{params:Promise.resolve({pedidoId:"pedido-integral"})});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,status:"APROVADO"});
+});
+
+test("tentativas integrais concorrentes bloqueiam pedido dividido antes da Point com flag desligada",async()=>{
   const c=await draft();let chamadas=0;enabled=false;
   const route=await carregarRota("app/api/pagamentos/mp/criar/route.ts",{
-    "@/lib/prisma":{prisma:prismaLegado()},"@/lib/dividir-conta/guards":criarGuardas(db,async()=>true),
+    "@/lib/prisma":{prisma:prismaLegado()},"@/lib/dividir-conta/guards":criarGuardas(db,async()=>true,()=>false),
     "@/lib/mp-pagamento":{},"@/lib/mercadopago":{obterDevicePoint:async()=>{chamadas++;return "point";}},
   });
-  const r=await route.POST(requisicao({pedidoId:c.pedidoId,referencia:"integral-bloqueado"}));
-  assert.equal(r.status,409);assert.equal(chamadas,0);
+  const results=await Promise.all([
+    route.POST(requisicao({pedidoId:c.pedidoId,referencia:"integral-bloqueado-1"})),
+    route.POST(requisicao({pedidoId:c.pedidoId,referencia:"integral-bloqueado-2"})),
+  ]);
+  assert.deepEqual(results.map(r=>r.status),[409,409]);assert.equal(chamadas,0);
+});
+
+test("diagnóstico Prisma exige admin e token forte antes da consulta",async()=>{
+  let consultas=0;
+  const prismaMock={prisma:{$queryRawUnsafe:async()=>{consultas++;return[{diagnostico:{currentUser:"postgres"}}];}}};
+  const cryptoMock={timingSafeEqual:(a:Buffer,b:Buffer)=>a.length===b.length&&a.every((byte,i)=>byte===b[i])};
+  const adminNegado=await carregarRota("app/api/internal/diagnostico-prisma/route.ts",{
+    "@/lib/admin-auth":{getAdminSession:async()=>({erro:Response.json({ok:false},{status:403})})},
+    "@/lib/prisma":prismaMock,"node:crypto":cryptoMock,
+  },{PRISMA_ROLE_DIAGNOSTIC_TOKEN:"x".repeat(48)});
+  const semSessao=await adminNegado.POST(new Request("https://isolated.invalid/",{method:"POST"}));
+  assert.equal(semSessao.status,403);assert.equal(consultas,0);
+
+  const adminOk=await carregarRota("app/api/internal/diagnostico-prisma/route.ts",{
+    "@/lib/admin-auth":{getAdminSession:async(perfis:string[])=>{assert.equal(perfis.join(","),"ADMIN");return{erro:null,perfil:"ADMIN"};}},
+    "@/lib/prisma":prismaMock,"node:crypto":cryptoMock,
+  },{PRISMA_ROLE_DIAGNOSTIC_TOKEN:"x".repeat(48)});
+  const tokenErrado=await adminOk.POST(new Request("https://isolated.invalid/",{method:"POST",headers:{authorization:`Bearer ${"y".repeat(48)}`}}));
+  assert.equal(tokenErrado.status,401);assert.equal(consultas,0);
+});
+
+test("diagnóstico Prisma executa somente consulta fixa, não revela segredos e aceita uma chamada",async()=>{
+  const secret="diagnostic-test-secret-"+"z".repeat(48);let consultas=0;
+  const prismaMock={prisma:{$queryRawUnsafe:async(sql:string,...values:unknown[])=>{
+    consultas++;assert.equal(values.length,0);assert.match(sql,/SELECT jsonb_build_object/);
+    assert.match(sql,/current_user/);assert.match(sql,/has_table_privilege/);
+    return[{diagnostico:{currentUser:"postgres",sessionUser:"postgres",relations:[]}}];
+  }}};
+  const route=await carregarRota("app/api/internal/diagnostico-prisma/route.ts",{
+    "@/lib/admin-auth":{getAdminSession:async()=>({erro:null,perfil:"ADMIN"})},
+    "@/lib/prisma":prismaMock,
+    "node:crypto":{timingSafeEqual:(a:Buffer,b:Buffer)=>a.length===b.length&&a.every((byte,i)=>byte===b[i])},
+  },{PRISMA_ROLE_DIAGNOSTIC_TOKEN:secret});
+  const request=new Request("https://isolated.invalid/",{method:"POST",headers:{authorization:`Bearer ${secret}`,"content-type":"application/json"},body:JSON.stringify({sql:"DROP TABLE Pedido"})});
+  const response=await route.POST(request);const body=await response.json();
+  assert.equal(response.status,200);assert.equal(response.headers.get("cache-control"),"no-store, private");
+  assert.deepEqual(body,{ok:true,diagnostico:{currentUser:"postgres",sessionUser:"postgres",relations:[]}});assert.equal(consultas,1);
+  const replay=await route.POST(new Request("https://isolated.invalid/",{method:"POST",headers:{authorization:`Bearer ${secret}`}}));
+  assert.equal(replay.status,409);assert.equal(consultas,1);
 });
 
 test("rota MP mantém erros de validação e não deixa lease para HTTP 400",async()=>{

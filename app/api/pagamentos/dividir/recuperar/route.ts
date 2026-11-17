@@ -13,5 +13,9 @@ export async function GET(req: Request) {
   const expected = Buffer.from(`Bearer ${secret}`);
   const received = Buffer.from(header);
   if (expected.length !== received.length || !timingSafeEqual(expected, received)) return new Response(null, { status: 401 });
-  return tratar(async () => { await recuperarDivisoes(); return respostaDivisao({ recuperado: true }); });
+  return tratar(async () => {
+    const resultado = await recuperarDivisoes();
+    console.info("[Divisão recovery] ciclo concluído", resultado);
+    return respostaDivisao({ recuperado: true, ...resultado });
+  });
 }

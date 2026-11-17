@@ -145,7 +145,7 @@ export async function buscarPagamentoPorReferencia(referencia: string): Promise<
 /**
  * Gera um QR Pix dinâmico (Orders API) para exibir na tela do totem, em paralelo
  * à cobrança da Point. A order expira sozinha no Mercado Pago.
- * Sem external_pos_id: a API aceita sem ele e não há env configurada para isso.
+ * Exige MP_EXTERNAL_POS_ID: sem ele o MP responde 400 "missing properties: external_pos_id".
  */
 export async function criarPixQRCode(params: {
   valor:      number;
@@ -168,7 +168,8 @@ export async function criarPixQRCode(params: {
       total_amount:       total,
       external_reference: params.referencia,
       description:        params.descricao.slice(0, 150),
-      config:             { qr: { mode: "dynamic" } },
+      // A API exige config.qr.external_pos_id (caixa "QR #1" da conta, external_id definido via PUT /pos)
+      config:             { qr: { mode: "dynamic", ...(process.env.MP_EXTERNAL_POS_ID ? { external_pos_id: process.env.MP_EXTERNAL_POS_ID } : {}) } },
       transactions:       { payments: [{ amount: total }] },
     }),
     signal: AbortSignal.timeout(10_000),
@@ -178,7 +179,7 @@ export async function criarPixQRCode(params: {
     { id?: string; type_response?: { qr_data?: string }; message?: string; errors?: unknown } | null;
 
   if (!res.ok || !json?.id || !json.type_response?.qr_data) {
-    console.error("[MP Pix QR] falha ao criar order:", res.status, JSON.stringify(json));
+    console.error("[MP Pix QR] falha ao criar order:", res.status, JSON.stringify(json), process.env.MP_EXTERNAL_POS_ID ? "" : "(MP_EXTERNAL_POS_ID não configurado)");
     throw new Error(json?.message ?? `Mercado Pago: order Pix não criada (HTTP ${res.status})`);
   }
   return { orderId: json.id, qrData: json.type_response.qr_data };

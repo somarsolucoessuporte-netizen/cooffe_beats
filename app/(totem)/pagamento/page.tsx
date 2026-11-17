@@ -12,6 +12,7 @@ import dynamic from "next/dynamic";
 import { QRCodeSVG } from "qrcode.react";
 import { gerarPixEstatico, pixEstaticoVisivel } from "@/lib/pix-estatico";
 import { DIVISAO_STORAGE } from "@/lib/dividir-conta/domain";
+import { encerrarAtendimentoDivisao, DIVISAO_TESTE_ISOLADA } from "@/lib/dividir-conta/client";
 
 const DividirConta = dynamic(() => import("@/components/totem/DividirConta"), {
   loading: () => <p className="p-6 text-center">Carregando acompanhamento da conta…</p>,
@@ -75,9 +76,9 @@ async function fetchTimeout(url: string, init: RequestInit = {}, ms = 15000): Pr
   finally { clearTimeout(t); }
 }
 
-// QR Pix dinâmico do Mercado Pago ainda não ativo: o estático é sempre exibido.
-// Quando o dinâmico estiver pronto, basta ligar esta flag — o estático vira reserva (falha ou > 10 s).
-const PIX_DINAMICO_ATIVO = false;
+// QR Pix dinâmico do Mercado Pago é o principal (confirma sozinho pelo webhook/polling).
+// O estático (chave CNPJ) vira reserva automática: aparece se o dinâmico falhar ou demorar > 10 s.
+const PIX_DINAMICO_ATIVO = true;
 
 async function copiarTexto(texto: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(texto); return true; } catch { /* WebView sem clipboard API */ }
@@ -170,8 +171,19 @@ export default function Pagamento() {
   const mobile = useTotemMobile(); // celular: cards de pagamento empilhados
   const [divisaoDisponivel, setDivisaoDisponivel] = useState(false);
   const [modoDivisao, setModoDivisao] = useState(false);
+  // Divisão cancelada com parcela já paga: mostra o saldo restante ao voltar à escolha de pagamento
+  const [divisaoParcial, setDivisaoParcial] = useState<{ pago: number; saldo: number } | null>(null);
   useEffect(() => {
-    try { if (sessionStorage.getItem(DIVISAO_STORAGE)) setModoDivisao(true); } catch { /* creation requires storage */ }
+    try {
+      const saved = sessionStorage.getItem(DIVISAO_STORAGE);
+      if (saved && JSON.parse(saved).id === DIVISAO_TESTE_ISOLADA) {
+        encerrarAtendimentoDivisao(sessionStorage);
+        limparCarrinho();
+        router.replace("/cardapio");
+        return;
+      }
+      if (saved) setModoDivisao(true);
+    } catch { /* creation requires storage */ }
     fetch("/api/pagamentos/dividir/config", { cache: "no-store" }).then(r => r.json()).then(d => setDivisaoDisponivel(d.enabled === true)).catch(() => {});
   }, []);
 
@@ -188,6 +200,10 @@ export default function Pagamento() {
   const [pixPayload, setPixPayload]     = useState<string | null>(null);
   const [pixCopiado, setPixCopiado]     = useState(false);
   const [modalPix, setModalPix]         = useState(false);
+  // QR Pix dinâmico (Orders API): estado exibido no painel
+  const [pixDin, setPixDin] = useState<{ estado: "gerando" | "pronto" | "erro"; qrData?: string; desde: number; erro?: string }>({ estado: "gerando", desde: 0 });
+  const pixRefTotem = useRef<{ pedidoId: string; referencia: string; descricao: string } | null>(null);
+  const [dinCopiado, setDinCopiado] = useState(false);
   const pixManualRef = useRef(false);
 
   const pedidoRef   = useRef<{ id: string; senha: string } | null>(null);
@@ -365,7 +381,7 @@ export default function Pagamento() {
       mesaId    = sessionStorage.getItem("mesaId");
     } catch(e) {}
 
-    var res = await fetch("/api/pedidos", {
+    var res = await fetchTimeout("/api/pedidos", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
@@ -385,11 +401,33 @@ export default function Pagamento() {
           };
         }),
       }),
-    });
+    }, 15000);
     var dados = await res.json();
     if (!dados.ok) throw new Error(dados.error ?? "Erro ao criar pedido");
     return dados.data as { id: string; senha: string };
   }, [empresaId, itens]);
+
+  // QR dinâmico: sem depender da Point nem do Pagamento existir. Timeout de 15 s; falha nunca é silenciosa.
+  async function gerarPixDinamico() {
+    var ref = pixRefTotem.current;
+    if (!ref) return;
+    setPixDin({ estado: "gerando", desde: Date.now() });
+    try {
+      var res = await fetchTimeout("/api/pagamentos/mp/pix-qr", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ pedidoId: ref.pedidoId, valor: totalRef.current, referencia: ref.referencia, descricao: ref.descricao }),
+      }, 15000);
+      var d = await res.json();
+      if (pixRefTotem.current !== ref) return; // saiu da tela
+      if (!d.ok || !d.qrData) throw new Error(d.error ?? "Resposta sem QR");
+      setPixDin({ estado: "pronto", qrData: d.qrData as string, desde: Date.now() });
+    } catch(e) {
+      if (pixRefTotem.current !== ref) return;
+      console.warn("[Pagamento] QR Pix dinâmico falhou:", e instanceof Error ? e.message : e);
+      setPixDin({ estado: "erro", desde: Date.now(), erro: e instanceof Error ? e.message : "erro" });
+    }
+  }
 
   const selecionarMetodo = useCallback(async function(metodo: "PIX" | "CARTAO") {
     try { if (sessionStorage.getItem(DIVISAO_STORAGE)) { setModoDivisao(true); return; } } catch { /* preserve integral flow when storage is unavailable */ }
@@ -424,6 +462,9 @@ export default function Pagamento() {
         var refPix = "CB-" + pedido.senha + "-" + Date.now();
         try { setPixPayload(gerarPixEstatico({ valor: totalRef.current, referencia: refPix })); } catch(e) { setPixPayload(null); }
         setPixCopiado(false);
+        setDinCopiado(false);
+        pixRefTotem.current = { pedidoId: pedido.id, referencia: refPix, descricao: "Coffee & Beats – " + pedido.senha };
+        void gerarPixDinamico();
         setTela("maquininha");
         setCarregando(false);
         iniciarPolling(pedido.id, false);
@@ -522,6 +563,8 @@ export default function Pagamento() {
     readerIdRef.current = null;
     setPixPayload(null);
     setPixCopiado(false);
+    pixRefTotem.current = null;
+    setPixDin({ estado: "gerando", desde: 0 });
     setErro(null);
     setSimulando(false);
     setTempoRestante(600);
@@ -587,11 +630,58 @@ export default function Pagamento() {
 
   // Painel do Pix estático (chave CNPJ): QR grande, valor, copia e cola e confirmação do atendente
   function painelPix() {
-    var visivel = pixEstaticoVisivel({ ativo: PIX_DINAMICO_ATIVO, estado: "gerando", decorridoMs: 0 });
-    if (!visivel) return null;
-    return (
+    var decorrido = pixDin.estado === "gerando" && pixDin.desde ? Date.now() - pixDin.desde : 0;
+    var visivel = pixEstaticoVisivel({ ativo: PIX_DINAMICO_ATIVO, estado: pixDin.estado, decorridoMs: decorrido });
+    var tamanhoQr = mobile ? 240 : 300;
+    var dinamico = !PIX_DINAMICO_ATIVO ? null : (
       <div className="w-full flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
         <p className="font-extrabold text-cb-marrom text-2xl text-center">Pague com Pix</p>
+        {pixDin.estado === "pronto" && pixDin.qrData && (
+          <>
+            <div className="bg-white p-2 rounded-xl border border-cb-marrom/10">
+              <QRCodeSVG value={pixDin.qrData} size={tamanhoQr} marginSize={2} level="M" />
+            </div>
+            <p className="text-cb-amber font-extrabold text-3xl">{formatarMoeda(totalValor)}</p>
+            <p className="text-cb-marrom font-bold text-lg text-center">Escaneie com o app do seu banco</p>
+            <button
+              onClick={async function() {
+                playClick();
+                if (pixDin.qrData && await copiarTexto(pixDin.qrData)) { setDinCopiado(true); setTimeout(function() { setDinCopiado(false); }, 3000); }
+              }}
+              className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem"
+            >
+              {dinCopiado ? "✓ Código copiado" : "Copiar código Pix"}
+            </button>
+            <p className="text-xs text-cb-marrom/60 text-center">O pedido é liberado automaticamente quando o pagamento for confirmado.</p>
+          </>
+        )}
+        {pixDin.estado === "gerando" && (
+          <div className="flex items-center gap-3 text-cb-marrom/60 text-sm py-10">
+            <span className="w-4 h-4 border-2 border-cb-marrom/40 border-t-transparent rounded-full animate-spin" />
+            <span>Gerando QR Pix…</span>
+          </div>
+        )}
+        {pixDin.estado === "erro" && (
+          <div className="flex flex-col items-center gap-3 py-4 w-full">
+            <p className="font-bold text-red-600 text-center">Não foi possível gerar o QR Pix</p>
+            <button
+              onClick={function() { playClick(); void gerarPixDinamico(); }}
+              className="w-full bg-cb-marrom text-white font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+      </div>
+    );
+    if (!visivel) return dinamico;
+    var reserva = PIX_DINAMICO_ATIVO;
+    return (
+      <div className="w-full flex flex-col gap-4">
+      {dinamico}
+      <div className="w-full flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
+        {reserva && <p className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-3 py-1">Pix reserva (chave CNPJ)</p>}
+        {!reserva && <p className="font-extrabold text-cb-marrom text-2xl text-center">Pague com Pix</p>}
         {pixPayload ? (
           <div className="bg-white p-2 rounded-xl border border-cb-marrom/10">
             <QRCodeSVG value={pixPayload} size={mobile ? 240 : 300} marginSize={2} level="M" />
@@ -623,6 +713,7 @@ export default function Pagamento() {
         >
           Atendente: confirmar Pix recebido
         </button>
+      </div>
       </div>
     );
   }
@@ -806,7 +897,14 @@ export default function Pagamento() {
     );
   }
 
-  if (modoDivisao) return <div className="h-full flex flex-col"><HeaderTotem mostrarVoltar={false} /><DividirConta itens={itens} total={totalValor} onVoltar={() => setModoDivisao(false)} onQuitada={async pedido => {
+  if (modoDivisao) return <div className="h-full flex flex-col"><HeaderTotem mostrarVoltar={false} /><DividirConta itens={itens} total={totalValor} onVoltar={(parcial) => { setModoDivisao(false); setDivisaoParcial(parcial ?? null); }} onAtendimento={() => {
+    let arquivo: Storage | undefined;
+    try { arquivo = localStorage; } catch { /* administrative recovery remains available */ }
+    encerrarAtendimentoDivisao(sessionStorage, arquivo);
+    limparCarrinho();
+    for (const key of ["clienteId", "clienteNome", "clienteWpp", "mesaId", "mesaSessionExpiry", "cupomId", "cupomDesconto"]) sessionStorage.removeItem(key);
+    router.replace("/cardapio");
+  }} onQuitada={async pedido => {
     const response = await fetch(`/api/pedidos/${pedido.id}`);
     const data = await response.json();
     if (!data.ok) throw new Error("Pedido indisponível");
@@ -842,7 +940,17 @@ export default function Pagamento() {
           </div>
         )}
 
+        {divisaoParcial && (
+          <div className="w-full max-w-xl bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col gap-3" role="status">
+            <p className="text-cb-marrom text-sm">
+              Divisão em andamento: já pago <strong>{formatarMoeda(divisaoParcial.pago / 100)}</strong> · saldo restante <strong>{formatarMoeda(divisaoParcial.saldo / 100)}</strong>
+            </p>
+            <button onClick={function() { playClick(); setDivisaoParcial(null); setModoDivisao(true); }} className="w-full bg-cb-marrom text-white font-bold py-3 rounded-xl touch-manipulation">Continuar divisão</button>
+          </div>
+        )}
+
         <div className={mobile ? "flex flex-col gap-3 w-full" : "grid grid-cols-2 gap-5 w-full max-w-xl"}>
+          <p className={"w-full text-left text-xs font-extrabold tracking-widest text-cb-marrom/60 " + (mobile ? "px-1" : "col-span-full")}>PAGAR INTEGRAL</p>
           {/* PIX */}
           <button
             onClick={function() { selecionarMetodo("PIX"); }}
@@ -881,9 +989,19 @@ export default function Pagamento() {
             <span className={mobile ? "text-sm text-cb-marrom/60" : "text-xs text-cb-marrom/60"}>Pagar no balcão</span>
           </button>
 
-          {/* Placeholder para manter grid simétrico */}
-          {divisaoDisponivel ? <button disabled={carregando || carregandoDinheiro || itens.length === 0 || totalValor < 0.02} onClick={() => setModoDivisao(true)} className={(mobile ? CARD_MOBILE : "flex flex-col items-center gap-3 p-6 min-h-[130px] ") + "bg-white border-2 border-cb-marrom/20 rounded-2xl touch-manipulation btn-totem disabled:opacity-50"}><span className="text-4xl">👥</span><span className="font-bold">Dividir conta</span><span className="text-xs">Por pessoas ou valores</span></button> : !mobile && <div />}
         </div>
+
+        {divisaoDisponivel && (
+          <button
+            disabled={carregando || carregandoDinheiro || itens.length === 0 || totalValor < 0.02}
+            onClick={() => setModoDivisao(true)}
+            className={(mobile ? CARD_MOBILE : "flex flex-col items-center gap-3 p-6 min-h-[130px] w-full max-w-xl ") + "bg-white border-2 border-cb-amber/50 rounded-2xl touch-manipulation btn-totem disabled:opacity-50"}
+          >
+            <span className="text-4xl">👥</span>
+            <span className="font-bold">DIVIDIR CONTA</span>
+            <span className="text-xs">Partes iguais ou valores personalizados</span>
+          </button>
+        )}
 
         {carregando && (
           <p className="text-cb-marrom/50 text-sm animate-pulse">Criando pedido...</p>
