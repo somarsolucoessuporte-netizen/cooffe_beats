@@ -10,6 +10,7 @@ import { useTotemMobile } from "@/contexts/TotemModoContext";
 import { printCupom } from "@/lib/sunmi-print";
 import dynamic from "next/dynamic";
 import { QRCodeSVG } from "qrcode.react";
+import { gerarPixEstatico, pixEstaticoVisivel } from "@/lib/pix-estatico";
 import { DIVISAO_STORAGE } from "@/lib/dividir-conta/domain";
 
 const DividirConta = dynamic(() => import("@/components/totem/DividirConta"), {
@@ -66,10 +67,35 @@ function QRFakeDemo() {
   );
 }
 
-// Confirmação dupla do atendente antes de liberar o pedido pago na maquininha
-function ModalConfirmacaoManual({ onConfirmar, onFechar }: {
+// Nenhuma espera de rede é infinita: aborta e deixa a tela tratar o erro
+async function fetchTimeout(url: string, init: RequestInit = {}, ms = 15000): Promise<Response> {
+  const ctl = new AbortController();
+  const t = setTimeout(function() { ctl.abort(); }, ms);
+  try { return await fetch(url, { ...init, signal: ctl.signal }); }
+  finally { clearTimeout(t); }
+}
+
+// QR Pix dinâmico do Mercado Pago ainda não ativo: o estático é sempre exibido.
+// Quando o dinâmico estiver pronto, basta ligar esta flag — o estático vira reserva (falha ou > 10 s).
+const PIX_DINAMICO_ATIVO = false;
+
+async function copiarTexto(texto: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* WebView sem clipboard API */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = texto; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch { return false; }
+}
+
+// Confirmação dupla do atendente antes de liberar o pedido pago na maquininha (ou por Pix)
+function ModalConfirmacaoManual({ onConfirmar, onFechar, pix = false }: {
   onConfirmar: () => Promise<void>;
   onFechar: () => void;
+  pix?: boolean;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
@@ -95,7 +121,7 @@ function ModalConfirmacaoManual({ onConfirmar, onFechar }: {
       >
         <p className="font-extrabold text-cb-marrom text-2xl text-center">Pagamento recebido?</p>
         <p className="text-cb-marrom/70 text-base text-center">
-          Confirme que o cliente realizou o pagamento na maquininha antes de liberar o pedido.
+          {pix ? "Confirme que o Pix da chave CNPJ caiu na conta antes de liberar o pedido." : "Confirme que o cliente realizou o pagamento na maquininha antes de liberar o pedido."}
         </p>
 
         {erroModal && (
@@ -158,6 +184,11 @@ export default function Pagamento() {
   // Cobrança SumUp não pôde ser criada: cliente paga direto na maquininha
   const [modalManual, setModalManual]   = useState(false);
   const [cancelando, setCancelando]     = useState(false);
+  // Pix estático (chave CNPJ): código exibido na tela, "copiado" e se o modal é do Pix
+  const [pixPayload, setPixPayload]     = useState<string | null>(null);
+  const [pixCopiado, setPixCopiado]     = useState(false);
+  const [modalPix, setModalPix]         = useState(false);
+  const pixManualRef = useRef(false);
 
   const pedidoRef   = useRef<{ id: string; senha: string } | null>(null);
   const pollingRef  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -168,8 +199,6 @@ export default function Pagamento() {
   const metodoRef   = useRef<"PIX" | "CARTAO" | "DINHEIRO">("PIX");
   // ID do reader quando o pagamento vai para maquininha física
   const readerIdRef = useRef<string | null>(null);
-  // QR Pix dinâmico (fallback na tela, em paralelo à maquininha); null se não gerado
-  const [pixQrData, setPixQrData]       = useState<string | null>(null);
 
   useEffect(function() {
     return function() {
@@ -233,7 +262,7 @@ export default function Pagamento() {
     if (!pedidoRef.current) return false;
     var id = pedidoRef.current.id;
     try {
-      var res   = await fetch("/api/pagamentos/cancelar/" + id, { method: "POST" });
+      var res   = await fetchTimeout("/api/pagamentos/cancelar/" + id, { method: "POST" }, 15000);
       var dados = await res.json();
       return dados.jaAprovado === true;
     } catch(e) {
@@ -317,13 +346,14 @@ export default function Pagamento() {
     var res   = await fetch("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO" }),
+      body:    JSON.stringify({ metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO", ...(pixManualRef.current ? { origem: "PIX_CNPJ" } : {}) }),
     });
     var dados = await res.json();
     if (!dados.ok) throw new Error(dados.error ?? "Erro ao confirmar pagamento");
 
     pararPolling();
     setModalManual(false);
+    setModalPix(false);
     finalizar(metodoRef.current);
   }
 
@@ -388,38 +418,45 @@ export default function Pagamento() {
         return;
       }
 
-      // PIX e cartão vão para a Point do Mercado Pago: o cliente escolhe a forma na própria
-      // maquininha (sem QR na tela do totem e sem depender do SumUp)
-      var referenciaMp = "CB-" + pedido.senha + "-" + Date.now();
-      var descricaoMp  = "Coffee & Beats – " + pedido.senha;
-      // Pix: gera TAMBÉM o QR dinâmico na tela, em paralelo à Point. Falha no QR nunca
-      // impede a cobrança na maquineta.
-      var pixQrPromise: Promise<string | null> = metodo === "PIX"
-        ? fetch("/api/pagamentos/mp/pix-qr", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ pedidoId: pedido.id, valor: totalRef.current, referencia: referenciaMp, descricao: descricaoMp }),
-          }).then(function(r) { return r.json(); })
-            .then(function(d) { return d && d.ok && d.qrData ? d.qrData as string : null; })
-            .catch(function() { return null; })
-        : Promise.resolve(null);
+      if (metodo === "PIX") {
+        // QR Pix estático (chave CNPJ) aparece NA HORA, sem esperar a maquineta nem a API do MP.
+        // A cobrança na Point segue em paralelo (alternativa para cartão).
+        var refPix = "CB-" + pedido.senha + "-" + Date.now();
+        try { setPixPayload(gerarPixEstatico({ valor: totalRef.current, referencia: refPix })); } catch(e) { setPixPayload(null); }
+        setPixCopiado(false);
+        setTela("maquininha");
+        setCarregando(false);
+        iniciarPolling(pedido.id, false);
 
-      var cobrancaPromise = fetch("/api/pagamentos/mp/criar", {
+        // Valor oficial do banco (se responder, substitui o código local)
+        fetchTimeout("/api/pagamentos/pix-estatico/" + pedido.id + "?ref=" + encodeURIComponent(refPix), {}, 8000)
+          .then(function(r) { return r.json(); })
+          .then(function(d) { if (d && d.ok && d.payload && pedidoRef.current && pedidoRef.current.id === pedido.id) setPixPayload(d.payload as string); })
+          .catch(function() { /* mantém o código local */ });
+
+        fetchTimeout("/api/pagamentos/mp/criar", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ pedidoId: pedido.id, metodo: metodo, descricao: "Coffee & Beats – " + pedido.senha, referencia: refPix }),
+        }, 20000)
+          .then(function(r) { return r.json(); })
+          .then(function(c) { if (c && c.ok && c.data) readerIdRef.current = c.data.readerId as string; else console.warn("[Pagamento] Point não recebeu a cobrança:", c && c.error); })
+          .catch(function(e) { console.warn("[Pagamento] Cobrança na Point não criada:", e instanceof Error ? e.message : e); });
+        return;
+      }
+
+      // Cartão vai para a Point do Mercado Pago: o cliente escolhe débito/crédito na própria maquininha
+      var cobrancaRes = await fetch("/api/pagamentos/mp/criar", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           pedidoId:   pedido.id,
           metodo:     metodo,
-          descricao:  descricaoMp,
-          referencia: referenciaMp,
+          descricao:  "Coffee & Beats – " + pedido.senha,
+          referencia: "CB-" + pedido.senha + "-" + Date.now(),
         }),
-      }).then(function(r) { return r.json(); });
-
-      var [qrGerado, cobranca] = await Promise.all([
-        pixQrPromise,
-        cobrancaPromise.catch(function(e) { return { ok: false, error: e instanceof Error ? e.message : "Erro ao criar cobrança" }; }),
-      ]);
-      setPixQrData(qrGerado);
+      });
+      var cobranca = await cobrancaRes.json();
       if (!cobranca.ok) throw new Error(cobranca.error ?? "Erro ao criar cobrança");
 
       // Point recebeu a cobrança: totem exibe tela de aguardo
@@ -471,39 +508,49 @@ export default function Pagamento() {
   }, [carregandoDinheiro, itens, totalValor, criarPedido]);
 
   // "Cancelar pagamento": cancela o pedido pendente e volta para a escolha do método
-  async function voltarEscolha() {
-    if (cancelando) return;
+  // A navegação é imediata (não espera backend nem Mercado Pago); o cancelamento roda em segundo plano
+  // e, se o pagamento tiver sido aprovado nesse meio tempo, segue para a confirmação.
+  function voltarEscolha(destino: "escolha" | "carrinho" = "escolha") {
     playClick();
-    setCancelando(true);
     pararTudo();
     setModalManual(false);
+    setModalPix(false);
+    pixManualRef.current = false;
 
-    var jaAprovado = await cancelarPedidoPendente();
-    if (jaAprovado) { finalizar(metodoRef.current); return; }
-
+    var pedidoCancelado = pedidoRef.current;
     pedidoRef.current   = null;
     readerIdRef.current = null;
-    setTela("escolha");
+    setPixPayload(null);
+    setPixCopiado(false);
     setErro(null);
     setSimulando(false);
     setTempoRestante(600);
     setCancelando(false);
+    if (destino === "carrinho") router.push("/carrinho");
+    else setTela("escolha");
+
+    if (pedidoCancelado) {
+      fetchTimeout("/api/pagamentos/cancelar/" + pedidoCancelado.id, { method: "POST" }, 15000)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d && d.jaAprovado === true) { pedidoRef.current = pedidoCancelado; finalizar(metodoRef.current); }
+        })
+        .catch(function(e) { console.warn("[Pagamento] cancelamento em segundo plano falhou:", e instanceof Error ? e.message : e); });
+    }
   }
 
   // Rodapé comum às telas de aguardo: confirmação manual do atendente (com confirmação dupla)
   // acima do cancelar, empilhados no fluxo normal da página (sem fixed/absolute)
   // Chamado como função (não <Componente />) para o modal não remontar a cada tick do timer
-    setPixQrData(null);
   function acoesAguardo() {
     return (
       <>
         <div className="flex flex-col gap-3 w-full max-w-md shrink-0">
           <div className="flex flex-col items-center gap-1">
             <button
-              onClick={function() { playClick(); setModalManual(true); }}
-              disabled={cancelando}
+              onClick={function() { playClick(); pixManualRef.current = false; setModalPix(false); setModalManual(true); }}
               className="w-full bg-cb-confirma text-white font-bold text-base py-3 px-6
-                         rounded-2xl touch-manipulation btn-totem disabled:opacity-60"
+                         rounded-2xl touch-manipulation btn-totem"
             >
               ✓ Já paguei na maquininha — confirmar pedido
             </button>
@@ -513,91 +560,134 @@ export default function Pagamento() {
           </div>
 
           <button
-            onClick={voltarEscolha}
-            disabled={cancelando}
+            onClick={function() { voltarEscolha("escolha"); }}
             className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-6
-                       rounded-2xl touch-manipulation btn-totem disabled:opacity-60"
+                       rounded-2xl touch-manipulation btn-totem"
           >
-            {cancelando ? "Cancelando..." : "Cancelar pagamento"}
+            Cancelar pagamento
+          </button>
+          <button
+            onClick={function() { voltarEscolha("carrinho"); }}
+            className="w-full text-cb-marrom/70 underline font-bold text-base py-2 px-6 touch-manipulation"
+          >
+            Voltar ao carrinho
           </button>
         </div>
 
         {modalManual && (
           <ModalConfirmacaoManual
+            pix={modalPix}
             onConfirmar={confirmarManualmente}
-            onFechar={function() { setModalManual(false); }}
+            onFechar={function() { setModalManual(false); setModalPix(false); pixManualRef.current = false; }}
           />
         )}
       </>
     );
   }
 
-  // ─── TELA MAQUININHA ─────────────────────────────────────────────────────────
-  if (tela === "maquininha") {
+  // Painel do Pix estático (chave CNPJ): QR grande, valor, copia e cola e confirmação do atendente
+  function painelPix() {
+    var visivel = pixEstaticoVisivel({ ativo: PIX_DINAMICO_ATIVO, estado: "gerando", decorridoMs: 0 });
+    if (!visivel) return null;
     return (
-      <div className="h-full flex flex-col animate-fadeIn">
-        <HeaderTotem />
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-[safe_center] px-8 py-5 gap-4">
-          <h1 className="font-sans font-extrabold text-3xl text-cb-marrom">
-            Pagamento na Maquininha
-          </h1>
-          <p className="text-cb-marrom/60 text-lg">
-  // QR Pix dinâmico do totem (fallback); o polling existente confirma qualquer um dos caminhos
-  function blocoPixQr() {
-    if (!pixQrData || metodoRef.current !== "PIX") return null;
-    return (
-      <div className="flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
-        <p className="font-extrabold text-cb-marrom text-xl text-center">Escaneie com qualquer app de banco</p>
-        <QRCodeSVG value={pixQrData} size={220} marginSize={2} />
-        <p className="text-cb-marrom/60 text-sm text-center">Ou pague pela maquininha ao lado</p>
+      <div className="w-full flex flex-col items-center gap-3 bg-white rounded-3xl p-6 shadow-sm">
+        <p className="font-extrabold text-cb-marrom text-2xl text-center">Pague com Pix</p>
+        {pixPayload ? (
+          <div className="bg-white p-2 rounded-xl border border-cb-marrom/10">
+            <QRCodeSVG value={pixPayload} size={mobile ? 240 : 300} marginSize={2} level="M" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 text-cb-marrom/60 text-sm py-16">
+            <span className="w-4 h-4 border-2 border-cb-marrom/40 border-t-transparent rounded-full animate-spin" />
+            <span>Gerando QR Pix…</span>
+          </div>
+        )}
+        <p className="text-cb-amber font-extrabold text-3xl">{formatarMoeda(totalValor)}</p>
+        <p className="text-cb-marrom font-bold text-lg text-center">Escaneie com o app do seu banco</p>
+        <button
+          disabled={!pixPayload}
+          onClick={async function() {
+            playClick();
+            if (pixPayload && await copiarTexto(pixPayload)) { setPixCopiado(true); setTimeout(function() { setPixCopiado(false); }, 3000); }
+          }}
+          className="w-full border-2 border-cb-marrom/30 text-cb-marrom font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem disabled:opacity-50"
+        >
+          {pixCopiado ? "✓ Código copiado" : "Copiar código Pix"}
+        </button>
+        <p className="text-sm font-bold text-amber-800 bg-amber-50 rounded-xl px-4 py-2 text-center">
+          Após pagar, mostre o comprovante ao atendente
+        </p>
+        <button
+          onClick={function() { playClick(); pixManualRef.current = true; setModalPix(true); setModalManual(true); }}
+          className="w-full bg-cb-confirma text-white font-bold text-base py-3 px-6 rounded-2xl touch-manipulation btn-totem"
+        >
+          Atendente: confirmar Pix recebido
+        </button>
       </div>
     );
   }
 
-            Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
-          </p>
+  // ─── TELA MAQUININHA ─────────────────────────────────────────────────────────
+  if (tela === "maquininha") {
+    var ehPix = metodoRef.current === "PIX";
+    return (
+      <div className="h-full flex flex-col animate-fadeIn">
+        <HeaderTotem />
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
+          <div className={"w-full mx-auto " + (ehPix && !mobile ? "max-w-5xl grid grid-cols-2 gap-6 items-start" : "max-w-xl flex flex-col items-center gap-4")}>
+            {ehPix && mobile && painelPix()}
 
-          <div className="flex flex-col items-center gap-4 bg-white rounded-3xl p-8 shadow-sm">
-            {/* Ícone animado */}
-            <div className="relative w-28 h-28 flex items-center justify-center">
-              <span className="text-7xl">🖥️</span>
-              <span className="absolute -bottom-1 -right-1 text-3xl animate-bounce">💳</span>
+            <div className="flex flex-col items-center gap-4">
+              <h1 className="font-sans font-extrabold text-3xl text-cb-marrom text-center">
+                {ehPix ? "Pagamento Pix ou Maquininha" : "Pagamento na Maquininha"}
+              </h1>
+              <p className="text-cb-marrom/60 text-lg">
+                Total: <span className="text-cb-amber font-extrabold">{formatarMoeda(totalValor)}</span>
+              </p>
+
+              <div className="flex flex-col items-center gap-4 bg-white rounded-3xl p-8 shadow-sm">
+                {/* Ícone animado */}
+                <div className="relative w-28 h-28 flex items-center justify-center">
+                  <span className="text-7xl">🖥️</span>
+                  <span className="absolute -bottom-1 -right-1 text-3xl animate-bounce">💳</span>
+                </div>
+
+                <p className="font-extrabold text-cb-marrom text-2xl text-center">
+                  {ehPix ? "Ou pague com cartão na maquininha" : "Conclua o pagamento na maquininha"}
+                </p>
+                <p className="text-cb-marrom/50 text-sm text-center">
+                  {ehPix ? "Aproxime ou insira o cartão (débito ou crédito)" : "Aproxime o cartão, insira ou escaneie o QR PIX"}
+                </p>
+
+                {/* Spinner */}
+                <div className="flex items-center gap-3 text-green-600 text-sm">
+                  <span className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Aguardando confirmação...</span>
+                </div>
+
+                {/* Contador regressivo */}
+                <div className="flex items-center gap-2 text-cb-marrom/70">
+                  <span className="text-sm">Expira em:</span>
+                  <span className={"font-mono font-bold text-lg " + (tempoRestante < 60 ? "text-red-500" : "text-cb-marrom")}>
+                    {formatarTempo(tempoRestante)}
+                  </span>
+                </div>
+              </div>
+
+              {erro && (
+                <div className="bg-red-50 border border-red-300 rounded-2xl px-6 py-3 text-red-600 text-sm">
+                  {erro}
+                </div>
+              )}
+
+              {acoesAguardo()}
             </div>
 
-            <p className="font-extrabold text-cb-marrom text-2xl text-center">
-              Conclua o pagamento na maquininha
-            </p>
-            <p className="text-cb-marrom/50 text-sm text-center">
-              Aproxime o cartão, insira ou escaneie o QR PIX
-            </p>
-
-            {/* Spinner */}
-            <div className="flex items-center gap-3 text-green-600 text-sm">
-              <span className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-              <span>Aguardando confirmação...</span>
-            </div>
-
-            {/* Contador regressivo */}
-            <div className="flex items-center gap-2 text-cb-marrom/70">
-              <span className="text-sm">Expira em:</span>
-              <span className={"font-mono font-bold text-lg " + (tempoRestante < 60 ? "text-red-500" : "text-cb-marrom")}>
-                {formatarTempo(tempoRestante)}
-              </span>
-            </div>
+            {ehPix && !mobile && painelPix()}
           </div>
-
-          {erro && (
-            <div className="bg-red-50 border border-red-300 rounded-2xl px-6 py-3 text-red-600 text-sm">
-              {erro}
-            </div>
-          )}
-
-          {acoesAguardo()}
         </div>
       </div>
     );
-          {blocoPixQr()}
-
   }
 
   // ─── TELA PIX ────────────────────────────────────────────────────────────────
