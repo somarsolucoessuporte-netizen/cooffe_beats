@@ -30,10 +30,29 @@ export async function POST(req: NextRequest) {
       referencia: String(referencia),
       descricao:  descricao ?? `Pedido ${pedido.id}`,
     });
+    await guardarOrderId(String(referencia), orderId);
     return NextResponse.json({ ok: true, orderId, qrData });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro ao gerar Pix QR";
     console.error("[MP pix-qr]", msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
+}
+
+/**
+ * Grava o orderId no Pagamento da mesma referência (usado para cancelar a order quando a
+ * Point aprovar, ou o totem cancelar). O Pagamento é criado em paralelo por /mp/criar, então
+ * espera ele aparecer por alguns segundos. Falha aqui não impede o QR de ser exibido.
+ */
+async function guardarOrderId(referencia: string, orderId: string) {
+  try {
+    for (let i = 0; i < 12; i++) {
+      const r = await prisma.pagamento.updateMany({ where: { referencia }, data: { pixOrderId: orderId } });
+      if (r.count > 0) return;
+      await new Promise((ok) => setTimeout(ok, 500));
+    }
+    console.warn("[MP pix-qr] Pagamento não encontrado para guardar orderId:", referencia, orderId);
+  } catch (e) {
+    console.warn("[MP pix-qr] não guardou orderId:", e instanceof Error ? e.message : e);
   }
 }

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (topico === "order" || topico === "orders") {
       const resultado = await consultarOrderMp(String(id));
       if (resultado.status === "PAID" && resultado.referencia) {
-        await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", pixQr: true, ...resultado, evento: body });
+        await aplicarResultadoMp(resultado.referencia, resultado, { provider: "mercadopago", pixQr: true, ...resultado, evento: body }, "qr");
       }
       return Response.json({ ok: true });
     }
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
     await aplicarResultadoMp(resultado.referencia, resultado, {
       provider: "mercadopago", paymentIntentId: String(id), ...resultado, evento: body,
-    });
+    }, "point");
 
     return Response.json({ ok: true });
   } catch (err) {

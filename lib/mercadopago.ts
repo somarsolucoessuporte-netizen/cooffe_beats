@@ -208,6 +208,50 @@ export async function consultarOrderMp(orderId: string): Promise<ResultadoPagame
   };
 }
 
+/** Erros de "já cancelada / expirada / finalizada" contam como sucesso no cancelamento. */
+const JA_ENCERRADO = /cancel|expir|final|processed|paid|refund|already|not[_ ]found|closed|conclu|conflict/i;
+
+/**
+ * Cancela a order do Pix QR. Nunca lança: o cancelamento não pode impedir a baixa do pedido.
+ * Retorna true quando a order está (ou já estava) encerrada.
+ */
+export async function cancelarOrderMp(orderId: string): Promise<boolean> {
+  try {
+    const accessToken = process.env.MP_ACCESS_TOKEN;
+    if (!accessToken) throw new Error("MP_ACCESS_TOKEN ausente");
+    const res = await fetch(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}/cancel`, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "X-Idempotency-Key": crypto.randomUUID() },
+      signal:  AbortSignal.timeout(8_000),
+    });
+    if (res.ok) return true;
+    const corpo = await res.text().catch(() => "");
+    if (res.status === 404 || res.status === 409 || JA_ENCERRADO.test(corpo)) return true;
+    console.warn("[MP cancelar order]", orderId, res.status, corpo.slice(0, 300));
+    return false;
+  } catch (e) {
+    console.warn("[MP cancelar order]", orderId, e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+/**
+ * Libera a maquininha cancelando a intenção de pagamento (reutiliza cancelarPagamentoPoint).
+ * Nunca lança; "já cancelada/finalizada" conta como sucesso.
+ */
+export async function cancelarPaymentIntentPoint(deviceId: string, paymentIntentId: string): Promise<boolean> {
+  try {
+    await cancelarPagamentoPoint(deviceId, paymentIntentId);
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    const detalhe = typeof e === "object" && e ? JSON.stringify(e) : msg;
+    if (JA_ENCERRADO.test(msg) || JA_ENCERRADO.test(detalhe)) return true;
+    console.warn("[MP cancelar intenção Point]", paymentIntentId, (msg || detalhe).slice(0, 300));
+    return false;
+  }
+}
+
 // ─── CHECKOUT PRO (pedido online) ────────────────────────────────────────────
 
 /** Cria a preferência do Checkout Pro — o cliente paga na página do Mercado Pago. */

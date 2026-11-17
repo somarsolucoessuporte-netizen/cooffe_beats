@@ -203,6 +203,8 @@ model Pagamento {
   criadoEm             DateTime        @default(now())
   paidAt               DateTime?
   confirmadoManualmente Boolean        @default(false)
+  // Order do Pix QR dinâmico (Orders API) criada em paralelo à Point; usada para cancelar o outro meio
+  pixOrderId           String?
 
   pedido Pedido @relation(fields: [pedidoId], references: [id])
 }

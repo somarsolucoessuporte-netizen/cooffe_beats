@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cancelarPagamentoPoint } from "@/lib/mercadopago";
+import { cancelarPagamentoPoint, cancelarOrderMp } from "@/lib/mercadopago";
 import { protegerPedido } from "@/lib/dividir-conta/guards";
 
 /**
@@ -20,7 +20,7 @@ export async function POST(
     if (bloqueio) return bloqueio;
     const pagamento = await prisma.pagamento.findUnique({
       where:  { pedidoId },
-      select: { status: true, payload: true },
+      select: { status: true, payload: true, pixOrderId: true },
     });
 
     if (pagamento?.status === "APROVADO") {
@@ -48,6 +48,12 @@ export async function POST(
       } catch (e) {
         console.warn("[Cancelar] Point não cancelou a intenção:", e instanceof Error ? e.message : e);
       }
+    }
+
+    // Pix QR da tela: cancela a order para ninguém pagar um QR de pedido cancelado
+    // (nunca lança, não trava o cancelamento).
+    if (pagamento?.status === "PENDENTE" && pagamento.pixOrderId) {
+      await cancelarOrderMp(pagamento.pixOrderId);
     }
 
     return NextResponse.json({ ok: true });
