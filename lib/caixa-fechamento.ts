@@ -32,6 +32,9 @@ export type ResumoCaixa = {
   totalPixCnpj: number;
   totalPixDividido: number;
   totalCartaoDividido: number;
+  totalCreditoDividido: number;
+  totalDebitoDividido: number;
+  totalPixCnpjDividido: number;
   totalPix: number;
   totalCartao: number;
   ticketMedio: number;
@@ -63,12 +66,15 @@ export async function resumoCaixa(empresaId: string, caixaId: string): Promise<R
     totalPedidos: pedidos.length,
     totalVendas: r2(vendas),
     totalDinheiro: r2(dinheiro),
-    totalCredito: r2(credito),
-    totalDebito: r2(debito),
-    totalPixQr: r2(pixQr),
-    totalPixCnpj: r2(pixCnpj),
+    totalCredito: r2(credito + div.totalCredito),
+    totalDebito: r2(debito + div.totalDebito),
+    totalPixQr: r2(pixQr + div.totalPixQr),
+    totalPixCnpj: r2(pixCnpj + div.totalPixCnpj),
     totalPixDividido: r2(div.totalPix),
     totalCartaoDividido: r2(div.totalCartao),
+    totalCreditoDividido: r2(div.totalCredito),
+    totalDebitoDividido: r2(div.totalDebito),
+    totalPixCnpjDividido: r2(div.totalPixCnpj),
     totalPix: r2(pixQr + pixCnpj + div.totalPix),
     totalCartao: r2(credito + debito + div.totalCartao),
     ticketMedio: pedidos.length ? r2(vendas / pedidos.length) : 0,

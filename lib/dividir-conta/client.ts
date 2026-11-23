@@ -28,9 +28,9 @@ export class RequestError extends Error {
 // Consult authoritative state once; never repeat the charge POST here.
 export async function cobrarComReconsulta<T>(cobrar: () => Promise<T>, consultar: () => Promise<T>) {
   try {
-    return { conta: await cobrar(), conflito: false };
+    return { conta: await cobrar(), conflito: false, mensagem: "" };
   } catch (error) {
     if (!(error instanceof RequestError) || error.status !== 409) throw error;
-    return { conta: await consultar(), conflito: true };
+    return { conta: await consultar(), conflito: true, mensagem: error.message };
   }
 }

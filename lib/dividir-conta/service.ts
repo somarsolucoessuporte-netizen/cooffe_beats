@@ -19,6 +19,8 @@ async function bloqueioCobranca(sql: Sql, deviceId?: string) {
   const [bloqueio] = await sql.query<{ motivo: string }>(`
     SELECT 'PARCELA_EM_ANDAMENTO' AS motivo FROM "TentativaParcela"
       WHERE status IN ('CRIANDO','PENDENTE','DESCONHECIDO')
+        AND "deviceId" NOT LIKE 'PIX_%'
+        AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '8 minutes'
         AND ($1::text IS NULL OR "deviceId"=$1)
     UNION ALL SELECT 'OPERACAO_INDETERMINADA' AS motivo FROM "DivisaoOperacaoLegada"
       WHERE "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '3 minutes'
@@ -94,7 +96,8 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
     const [pedido] = await db.query<{ senha: string }>(`SELECT senha FROM "Pedido" WHERE id = $1`, [c.pedidoId]);
     return { id, pedidoId: c.pedidoId, senha: pedido.senha, total: c.total, pago, reservado, saldo: c.total - pago, status: c.status, habilitada: enabled(), bloqueioCobranca: await bloqueioCobranca(db, deviceAtual()),
       pix: tentativas.filter(t => ehPixQr(t.deviceId) && ATIVOS.includes(t.status as typeof ATIVOS[number]) && t.qrData).map(t => ({ tentativaId: t.id, parcelaId: t.parcelaId, qrData: t.qrData as string, valor: t.valor })),
-      parcelas: parcelas.map(p => ({ ...p, tentativas: tentativas.filter(t => t.parcelaId === p.id).map(t => ({ id: t.id, status: t.status, meio: ehPixQr(t.deviceId) ? "PIX" : "POINT" })) })) };
+      maquininha: (() => { const t = tentativas.find(x => ATIVOS.includes(x.status as typeof ATIVOS[number]) && !x.deviceId.startsWith("PIX_") && x.criadoEm && Date.now() - new Date(x.criadoEm).getTime() < 8 * 60000); const p = t && parcelas.find(x => x.id === t.parcelaId); return p ? { parcelaId: p.id, ordem: p.ordem } : null; })(),
+      parcelas: parcelas.map(p => ({ ...p, tentativas: tentativas.filter(t => t.parcelaId === p.id).map(t => ({ id: t.id, status: t.status, meio: ehPixQr(t.deviceId) ? "PIX" : "POINT", criadoEm: t.criadoEm ? new Date(t.criadoEm).toISOString() : null })) })) };
   }
 
   async function cobrar(id: string, token: string, parcelaId: string, chave: string, deviceId: string) {
@@ -103,6 +106,9 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
     if (!/^[a-f0-9-]{36}$/.test(chave) || !deviceId) throw new DivisaoError("Tentativa inválida", 400);
     // Pendências vencidas (timeout da maquineta, cancelamento que falhou) são liberadas antes de reservar.
     await expirarPendentes(id).catch(() => {});
+    // Tentativas vencidas de OUTRAS contas (abandonadas) também são encerradas em segundo plano:
+    // antes, uma tentativa velha de outra conta mantinha a maquininha "em uso" para sempre.
+    await Promise.race([expirarPendentes().catch(() => {}), new Promise(r => setTimeout(r, 6000))]);
     const reserva = await db.transaction(async tx => {
       await lock(tx);
       const conta = await autorizar(tx, id, token);

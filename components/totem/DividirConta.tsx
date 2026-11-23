@@ -8,10 +8,11 @@ import { cobrarComReconsulta, encerrarAtendimentoDivisao, RequestError } from "@
 import { gerarPixEstatico, pixEstaticoVisivel } from "@/lib/pix-estatico";
 import { formatarMoeda } from "@/lib/utils";
 
-type Tentativa = { id: string; status: string; meio?: string };
+type Tentativa = { id: string; status: string; meio?: string; criadoEm?: string | null };
 type Resumo = {
   id: string; pedidoId: string; senha: string; total: number; pago: number; saldo: number; reservado: number; status: string; habilitada: boolean;
   bloqueioCobranca?: string | null;
+  maquininha?: { parcelaId: string; ordem: number } | null;
   pix?: { tentativaId: string; parcelaId: string; qrData: string; valor: number }[];
   parcelas: { id: string; ordem: number; valor: number; status: string; tentativas: Tentativa[] }[];
 };
@@ -20,6 +21,8 @@ type Parcial = { pago: number; saldo: number };
 type PixPainel = { parcelaId: string; chavePix: string; desde: number; dinamico: "gerando" | "pronto" | "erro"; erro?: string; confirmando?: boolean };
 
 const TIMEOUT_REDE_MS = 15000;
+const VALIDADE_POINT_MS = 8 * 60 * 1000;
+const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 const ATIVOS = ["CRIANDO", "PENDENTE", "DESCONHECIDO"];
 const moeda = (c: number) => formatarMoeda(c / 100);
 const estados: Record<string,string> = { CRIANDO: "Enviando à maquininha", PENDENTE: "Aguardando pagamento", DESCONHECIDO: "Aguardando confirmação", APROVADO: "Pago", RECUSADO: "Pagamento não aprovado", REVISAO: "Solicite ajuda ao atendente" };
@@ -123,10 +126,10 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
 
   // Re-renderiza a cada segundo enquanto há painel Pix (regra dos 10 s do Pix reserva)
   useEffect(() => {
-    if (!painel) return;
+    if (!painel && !conta?.maquininha) return;
     const t = setInterval(() => setTick(n => n + 1), 1000);
     return () => clearInterval(t);
-  }, [painel]);
+  }, [painel, conta?.maquininha]);
 
   useEffect(() => {
     if (!conta || conta.status !== "QUITADA" || conta.saldo !== 0 || conta.reservado !== 0 || finalizando || falhaFinalizacao.current) return;
@@ -179,7 +182,7 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
       );
       if (saiu.current) return;
       setConta(resultado.conta);
-      if (resultado.conflito) setErro("Estado atualizado após conflito. Nenhuma cobrança foi reenviada automaticamente.");
+      if (resultado.conflito) setErro(resultado.mensagem || "Estado atualizado após conflito. Nenhuma cobrança foi reenviada automaticamente.");
     } catch (e) { setErro(e instanceof Error ? e.message : "Aguardando confirmação do estado da conta. Não repita o pagamento."); }
     finally { cobrando.current = false; setOcupado(false); }
   }
@@ -221,6 +224,18 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
       setConta(data); setPainel(null);
     } catch (e) { setErro(e instanceof Error ? e.message : "Não foi possível confirmar o Pix."); setPainel(p => p ? { ...p, confirmando: false } : p); }
     finally { cobrando.current = false; setOcupado(false); }
+  }
+  // Cartão -> Pix: libera a maquininha (espera no máximo 4 s; o cancelamento no MP segue em segundo plano) e abre o Pix
+  async function trocarParaPix(parcelaId: string) {
+    if (!conta || cobrando.current) return;
+    cobrando.current = true; setOcupado(true); setErro("");
+    try {
+      const cancelamento = request(`/api/pagamentos/dividir/${conta.id}/cancelar-pagamento`, {}).catch(() => null);
+      const d = await Promise.race([cancelamento, new Promise<null>(ok => setTimeout(() => ok(null), 4000))]);
+      if (saiu.current) return;
+      if (d) setConta(d);
+    } finally { cobrando.current = false; setOcupado(false); }
+    await abrirPix(parcelaId);
   }
   // Fecha o painel e cancela (em segundo plano) o QR dinâmico pendente
   function fecharPainel() {
@@ -324,12 +339,27 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
           const ultima = p.tentativas[p.tentativas.length - 1];
           const estado = p.status === "APROVADO" ? "Pago" : estados[ultima?.status ?? ""] ?? "A pagar";
           const parcelaAtiva = p.tentativas.some(t => ATIVOS.includes(t.status));
-          const desabilitado = ocupado || ativaNaConta || !conta.habilitada || conta.status !== "ABERTA";
-          return <li key={p.id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-3">
-            <div><p className="font-bold">Pessoa {p.ordem} · {moeda(p.valor)}</p><p className="text-sm" aria-live="polite">{estado}</p>{ultima?.status === "DESCONHECIDO" && <p className="text-sm">Aguardando confirmação. Não repita o pagamento.</p>}</div>
-            {p.status === "ABERTA" && !parcelaAtiva && <div className="flex flex-col gap-2">
-              <button className="bg-cb-marrom text-white rounded-xl px-5 py-3 disabled:opacity-40 touch-manipulation" disabled={desabilitado} onClick={() => pagar(p.id)}>Maquininha (cartão)</button>
-              <button className="border-2 border-cb-marrom rounded-xl px-5 py-3 font-bold disabled:opacity-40 touch-manipulation" disabled={ocupado || !conta.habilitada || conta.status !== "ABERTA" || (ativaNaConta && !painel)} onClick={() => abrirPix(p.id)}>Pagar com Pix</button>
+          const pointAtiva = p.tentativas.find(t => ATIVOS.includes(t.status) && t.meio === "POINT");
+          const emUsoPor = conta.maquininha && conta.maquininha.parcelaId !== p.id ? conta.maquininha.ordem : null;
+          const desabilitado = ocupado || !conta.habilitada || conta.status !== "ABERTA" || emUsoPor !== null;
+          const recusada = ultima?.status === "RECUSADO" && p.status === "ABERTA";
+          const restante = pointAtiva?.criadoEm ? VALIDADE_POINT_MS - (Date.now() - new Date(pointAtiva.criadoEm).getTime()) : null;
+          return <li key={p.id} className="bg-white rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div><p className="font-bold">Pessoa {p.ordem} · {moeda(p.valor)}</p><p className="text-sm" aria-live="polite">{pointAtiva ? "Aguardando" : estado}</p>{ultima?.status === "DESCONHECIDO" && !pointAtiva && <p className="text-sm">Aguardando confirmação. Não repita o pagamento.</p>}</div>
+              {p.status === "ABERTA" && !parcelaAtiva && <div className="flex flex-col gap-2">
+                <button className="bg-cb-marrom text-white rounded-xl px-5 py-3 disabled:opacity-40 touch-manipulation" disabled={desabilitado} onClick={() => pagar(p.id)}>{emUsoPor !== null ? `Maquininha em uso pela Pessoa ${emUsoPor}` : recusada ? "Tentar de novo (cartão)" : "Cartão"}</button>
+                <button className="border-2 border-cb-marrom rounded-xl px-5 py-3 font-bold disabled:opacity-40 touch-manipulation" disabled={ocupado || !conta.habilitada || conta.status !== "ABERTA"} onClick={() => abrirPix(p.id)}>{recusada ? "Trocar para Pix" : "Pix"}</button>
+              </div>}
+            </div>
+            {recusada && <p className="text-sm text-red-700 bg-red-50 rounded-lg p-2">Cartão não aprovado, cancelado ou expirado. Tente de novo ou troque para Pix.</p>}
+            {pointAtiva && <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col gap-2" role="status">
+              <p className="font-extrabold">Passe o cartão na maquininha — {moeda(p.valor)}</p>
+              <p className="text-sm">Aguardando{restante !== null ? ` · expira em ${restante > 0 ? mmss(restante) : "instantes"}` : ""}</p>
+              <div className="flex gap-2">
+                <button onClick={cancelarPagamentoAtivo} disabled={ocupado} className="flex-1 border-2 border-cb-marrom rounded-xl px-4 py-3 font-bold bg-white touch-manipulation disabled:opacity-50">Cancelar</button>
+                <button onClick={() => trocarParaPix(p.id)} disabled={ocupado} className="flex-1 bg-cb-marrom text-white rounded-xl px-4 py-3 font-bold touch-manipulation disabled:opacity-50">Trocar para Pix</button>
+              </div>
             </div>}
           </li>;
         })}
