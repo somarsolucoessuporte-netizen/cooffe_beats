@@ -42,6 +42,32 @@ type RelatorioDia = {
   extrato: ItemExtrato[];
 };
 
+type Pendencia = {
+  tipo: "DIVISAO" | "PAGAMENTO"; id: string; pedidoId: string; descricao: string;
+  valor: number; pago: number; criadoEm: string; temPagamento: boolean;
+};
+
+type ResumoFechamento = {
+  totalPedidos: number; totalVendas: number; totalDinheiro: number; totalCredito: number; totalDebito: number;
+  totalPixQr: number; totalPixCnpj: number; totalPixDividido: number; totalCartaoDividido: number;
+};
+
+/** fetch com limite de 15 s: nunca fica carregando para sempre. */
+async function chamar(url: string, init?: RequestInit) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await fetch(url, { ...init, signal: ctrl.signal, cache: "no-store" });
+    const texto = await r.text();
+    let d: { ok?: boolean; error?: string; data?: unknown; pendencias?: Pendencia[] } = {};
+    try { d = JSON.parse(texto); } catch { d = { ok: false, error: `Resposta inválida do servidor (HTTP ${r.status})` }; }
+    return { status: r.status, ...d };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw new Error("O servidor demorou mais de 15 segundos para responder.");
+    throw new Error("Sem conexão com o servidor.");
+  } finally { clearTimeout(t); }
+}
+
 const R$ = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -58,6 +84,11 @@ export default function CaixaPage() {
   const [mostrarAbrirModal, setMostrarAbrirModal] = useState(false);
   const [mostrarFecharModal, setMostrarFecharModal] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [fechResumo, setFechResumo] = useState<ResumoFechamento | null>(null);
+  const [pendencias, setPendencias] = useState<Pendencia[]>([]);
+  const [conferindo, setConferindo] = useState(false);
+  const [erroFechar, setErroFechar] = useState("");
+  const [confirmaForcar, setConfirmaForcar] = useState(false);
   const [dataRelatorio, setDataRelatorio] = useState(new Date().toISOString().slice(0, 10));
 
   const carregarStatus = useCallback(async () => {
@@ -97,25 +128,46 @@ export default function CaixaPage() {
     finally { setAbrindo(false); setTimeout(() => setMensagem(""), 4000); }
   }
 
-  async function fecharCaixa() {
-    setFechando(true);
+  async function conferirFechamento() {
+    setConferindo(true); setErroFechar(""); setConfirmaForcar(false);
     try {
-      const r = await fetch("/api/caixa/fechar", {
+      const d = await chamar("/api/caixa/fechar");
+      if (d.ok) {
+        const dados = d.data as { resumo: ResumoFechamento; pendencias: Pendencia[] };
+        setFechResumo(dados.resumo);
+        setPendencias(dados.pendencias);
+      } else setErroFechar(d.error ?? "Erro ao conferir o caixa.");
+    } catch (e) { setErroFechar(e instanceof Error ? e.message : "Erro ao conferir o caixa."); }
+    finally { setConferindo(false); }
+  }
+
+  function abrirFechar() {
+    setFechResumo(null); setPendencias([]); setErroFechar(""); setConfirmaForcar(false);
+    setMostrarFecharModal(true);
+    void conferirFechamento();
+  }
+
+  async function fecharCaixa(opcoes: { resolver?: boolean; forcar?: boolean } = {}) {
+    setFechando(true); setErroFechar("");
+    try {
+      const d = await chamar("/api/caixa/fechar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(opcoes),
       });
-      const d = await r.json();
       if (d.ok) {
         setMensagem("Caixa fechado com sucesso!");
         setMostrarFecharModal(false);
         await carregarStatus();
         await carregarRelatorio();
+        setTimeout(() => setMensagem(""), 4000);
       } else {
-        setMensagem("Erro: " + d.error);
+        if (d.pendencias) setPendencias(d.pendencias);
+        setConfirmaForcar(false);
+        setErroFechar(d.error ?? "Erro ao fechar o caixa.");
       }
-    } catch { setMensagem("Erro ao fechar caixa."); }
-    finally { setFechando(false); setTimeout(() => setMensagem(""), 4000); }
+    } catch (e) { setErroFechar(e instanceof Error ? e.message : "Erro ao fechar o caixa."); }
+    finally { setFechando(false); }
   }
 
   function imprimirRelatorio() {
@@ -205,7 +257,7 @@ ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.
         <div>
           {estaAberto ? (
             <button
-              onClick={() => setMostrarFecharModal(true)}
+              onClick={abrirFechar}
               className="px-5 py-2.5 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors"
             >
               Fechar Caixa
@@ -383,36 +435,107 @@ ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.
       {/* Modal Fechar Caixa */}
       {mostrarFecharModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-auto shadow-2xl flex flex-col gap-4">
             <h3 className="font-bold text-cb-marrom text-lg">Fechar Caixa</h3>
-            {resumo && (
-              <div className="bg-cb-marrom/5 rounded-xl p-4 flex flex-col gap-2 text-sm text-cb-marrom">
-                <div className="flex justify-between">
-                  <span>Total vendas:</span>
-                  <span className="font-bold">{R$(resumo.totalVendas)}</span>
-                </div>
-                <div className="flex justify-between text-cb-marrom/60">
-                  <span>Pedidos:</span><span>{resumo.totalPedidos}</span>
-                </div>
+
+            {conferindo && <p className="text-sm text-cb-marrom/60">Conferindo o caixa...</p>}
+
+            {fechResumo && (
+              <div className="bg-cb-marrom/5 rounded-xl p-4 flex flex-col gap-1.5 text-sm text-cb-marrom">
+                <div className="flex justify-between"><span>Total vendas:</span><span className="font-bold">{R$(fechResumo.totalVendas)}</span></div>
+                <div className="flex justify-between text-cb-marrom/60"><span>Pedidos:</span><span>{fechResumo.totalPedidos}</span></div>
+                <div className="border-t border-cb-marrom/10 my-1" />
+                <div className="flex justify-between"><span>Dinheiro</span><span>{R$(fechResumo.totalDinheiro)}</span></div>
+                <div className="flex justify-between"><span>Crédito</span><span>{R$(fechResumo.totalCredito)}</span></div>
+                <div className="flex justify-between"><span>Débito</span><span>{R$(fechResumo.totalDebito)}</span></div>
+                <div className="flex justify-between"><span>Pix QR</span><span>{R$(fechResumo.totalPixQr)}</span></div>
+                <div className="flex justify-between"><span>Pix CNPJ (manual)</span><span>{R$(fechResumo.totalPixCnpj)}</span></div>
+                {(fechResumo.totalPixDividido > 0 || fechResumo.totalCartaoDividido > 0) && (
+                  <div className="flex justify-between text-cb-marrom/70">
+                    <span>Conta dividida (Pix / Cartão)</span>
+                    <span>{R$(fechResumo.totalPixDividido)} / {R$(fechResumo.totalCartaoDividido)}</span>
+                  </div>
+                )}
               </div>
             )}
-            <p className="text-sm text-cb-marrom/60">
-              Ao fechar o caixa, o resumo do turno será registrado. Deseja confirmar?
-            </p>
-            <div className="flex gap-3">
+
+            {pendencias.length > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex flex-col gap-2 text-sm text-cb-marrom">
+                <p className="font-bold">⚠️ {pendencias.length} pendência(s) neste caixa</p>
+                {pendencias.map(p => (
+                  <div key={p.tipo + p.id} className="flex justify-between gap-3 border-t border-amber-200 pt-2">
+                    <span>
+                      {p.descricao}
+                      <span className="block text-xs text-cb-marrom/50">
+                        desde {fmt(p.criadoEm)}{p.temPagamento ? ` · já recebido ${R$(p.pago)}` : ""}
+                      </span>
+                    </span>
+                    <span className="font-medium whitespace-nowrap">{R$(p.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {erroFechar && (
+              <p role="alert" className="text-sm font-medium px-3 py-2 rounded-xl bg-red-50 text-red-600">{erroFechar}</p>
+            )}
+
+            {pendencias.length === 0 && !conferindo && !erroFechar && (
+              <p className="text-sm text-cb-marrom/60">Ao fechar o caixa, o resumo do turno será registrado. Deseja confirmar?</p>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {pendencias.length > 0 ? (
+                <>
+                  <button
+                    onClick={() => fecharCaixa({ resolver: true })}
+                    disabled={fechando || conferindo}
+                    className="py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                  >
+                    {fechando ? "Resolvendo..." : "Resolver pendências e fechar"}
+                  </button>
+                  {confirmaForcar ? (
+                    <button
+                      onClick={() => fecharCaixa({ forcar: true })}
+                      disabled={fechando}
+                      className="py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {fechando ? "Fechando..." : "Confirmar: fechar com pendências"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmaForcar(true)}
+                      disabled={fechando || conferindo}
+                      className="py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 disabled:opacity-50 transition-colors"
+                    >
+                      Fechar mesmo assim
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={() => fecharCaixa()}
+                  disabled={fechando || conferindo}
+                  className="py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 disabled:opacity-50 transition-colors"
+                >
+                  {fechando ? "Fechando..." : erroFechar ? "Tentar novamente" : "Confirmar Fechamento"}
+                </button>
+              )}
+              {erroFechar && (
+                <button
+                  onClick={conferirFechamento}
+                  disabled={conferindo || fechando}
+                  className="py-2 rounded-xl border border-cb-marrom/20 text-cb-marrom text-sm font-medium disabled:opacity-50"
+                >
+                  Conferir novamente
+                </button>
+              )}
               <button
                 onClick={() => setMostrarFecharModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-cb-marrom/20 text-cb-marrom text-sm font-medium"
+                disabled={fechando}
+                className="py-2.5 rounded-xl border border-cb-marrom/20 text-cb-marrom text-sm font-medium disabled:opacity-50"
               >
                 Cancelar
-              </button>
-              <button
-                onClick={fecharCaixa}
-                disabled={fechando}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold
-                           hover:bg-red-600 disabled:opacity-50 transition-colors"
-              >
-                {fechando ? "Fechando..." : "Confirmar Fechamento"}
               </button>
             </div>
           </div>
