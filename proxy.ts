@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase-web";
 
-const PAINEL_PREFIXES = ["/dashboard", "/pedidos", "/kds", "/admin", "/clientes", "/caixa"];
+const PAINEL_PREFIXES = ["/dashboard", "/pedidos", "/kds", "/admin", "/clientes", "/caixa", "/suporte", "/somar", "/relatorios"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -72,5 +72,8 @@ export const config = {
     "/admin/:path*",
     "/clientes/:path*",
     "/caixa/:path*",
+    "/suporte/:path*",
+    "/somar/:path*",
+    "/relatorios/:path*",
   ],
 };

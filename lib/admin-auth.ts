@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-type Perfil = "ADMIN" | "GERENTE" | "BARISTA" | "ATENDENTE";
+type Perfil = "ADMIN" | "GERENTE" | "BARISTA" | "ATENDENTE" | "SOMAR";
 
 export async function getAdminSession(perfisPermitidos: Perfil[] = ["ADMIN"]) {
   const session = await getServerSession(authOptions);

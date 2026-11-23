@@ -55,6 +55,7 @@ enum Perfil {
   GERENTE
   BARISTA
   ATENDENTE
+  SOMAR
 }
 
 model Categoria {

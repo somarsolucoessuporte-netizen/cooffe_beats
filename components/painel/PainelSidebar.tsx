@@ -14,6 +14,7 @@ const NAV_OPERACAO = [
 const NAV_CLIENTES = [
   { href: "/clientes",  label: "Clientes",    icone: "👥", perfis: ["ADMIN", "GERENTE"] },
   { href: "/dashboard", label: "Dashboard",   icone: "📊", perfis: ["ADMIN", "GERENTE"] },
+  { href: "/relatorios", label: "Relatórios",  icone: "📑", perfis: ["ADMIN", "SOMAR"] },
 ];
 
 const NAV_ESTOQUE: { href: string; label: string; icone: string; perfis?: string[] }[] = [
@@ -113,8 +114,23 @@ export default function PainelSidebar() {
           Fila de Senhas
         </a>
 
+        {/* Suporte */}
+        <div className="mt-4 mb-1 px-4">
+          <p className="text-[10px] font-bold text-[#F6F0E5]/40 uppercase tracking-widest">Suporte</p>
+        </div>
+        <Link href="/suporte" className={linkClass("/suporte")}>
+          <span className="text-lg">🛟</span>
+          Suporte
+        </Link>
+        {podeVer(["SOMAR"]) && (
+          <Link href="/somar/chamados" className={linkClass("/somar/chamados")}>
+            <span className="text-lg">🎧</span>
+            Central da Somar
+          </Link>
+        )}
+
         {/* Clientes */}
-        {podeVer(["ADMIN", "GERENTE"]) && (
+        {podeVer(["ADMIN", "GERENTE", "SOMAR"]) && (
           <>
             <div className="mt-4 mb-1 px-4">
               <p className="text-[10px] font-bold text-[#F6F0E5]/40 uppercase tracking-widest">Clientes</p>

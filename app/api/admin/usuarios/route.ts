@@ -36,7 +36,7 @@ export async function GET() {
 
   try {
     const usuarios = await prisma.usuario.findMany({
-      where: { empresaId: empresaId! },
+      where: { empresaId: empresaId!, perfil: { not: "SOMAR" } },
       select: CAMPOS_PUBLICOS,
       orderBy: { nome: "asc" },
     });
