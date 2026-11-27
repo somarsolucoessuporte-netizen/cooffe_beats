@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { CaixaFechadoTela, chamar, useFecharCaixa, type CaixaFechado, type Pendencia } from "@/components/painel/FechamentoCaixa";
+import { CaixaFechadoTela, LinhaSemConciliacao, chamar, useFecharCaixa, type CaixaFechado, type Pendencia } from "@/components/painel/FechamentoCaixa";
 import { diaSP } from "@/lib/fuso";
 
 type StatusCaixa = {
@@ -40,6 +40,13 @@ type RelatorioDia = {
   totalCartao: number;
   totalDinheiro: number;
   totalSimulado: number;
+  totalCredito: number;
+  totalDebito: number;
+  totalPrepago: number;
+  totalPixQr: number;
+  totalPixCnpj: number;
+  qtdSemConciliacao: number;
+  totalSemConciliacao: number;
   topProdutos: { nome: string; quantidade: number; total: number }[];
   extrato: ItemExtrato[];
 };
@@ -47,6 +54,7 @@ type RelatorioDia = {
 type ResumoFechamento = {
   totalPedidos: number; totalVendas: number; totalDinheiro: number; totalCredito: number; totalDebito: number;
   totalPixQr: number; totalPixCnpj: number; totalPixDividido: number; totalCartaoDividido: number;
+  totalPrepago: number; qtdSemConciliacao: number; totalSemConciliacao: number;
 };
 
 const R$ = (v: number) =>
@@ -158,9 +166,13 @@ h1{text-align:center;font-size:14px;margin:4px 0}
 <div class="linha"><span>Cancelados:</span><span>${relatorio.cancelados}</span></div>
 <div class="sep"></div>
 <div class="linha bold"><span>TOTAL VENDAS:</span><span>${R$(relatorio.totalVendas)}</span></div>
-<div class="linha"><span>PIX:</span><span>${R$(relatorio.totalPix)}</span></div>
-<div class="linha"><span>Cartão:</span><span>${R$(relatorio.totalCartao)}</span></div>
+<div class="linha"><span>Pix QR:</span><span>${R$(relatorio.totalPixQr)}</span></div>
+<div class="linha"><span>Pix CNPJ (manual):</span><span>${R$(relatorio.totalPixCnpj)}</span></div>
+<div class="linha"><span>Crédito:</span><span>${R$(relatorio.totalCredito)}</span></div>
+<div class="linha"><span>Débito:</span><span>${R$(relatorio.totalDebito)}</span></div>
+<div class="linha"><span>Pré-pago:</span><span>${R$(relatorio.totalPrepago)}</span></div>
 <div class="linha"><span>Dinheiro:</span><span>${R$(relatorio.totalDinheiro)}</span></div>
+<div class="linha"><span>Manual sem conciliação (${relatorio.qtdSemConciliacao}):</span><span>${R$(relatorio.totalSemConciliacao)}</span></div>
 <div class="sep"></div>
 <div class="bold" style="margin-bottom:4px">TOP PRODUTOS</div>
 ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.nome}</span><span>${R$(p.total)}</span></div>`).join("")}
@@ -293,9 +305,13 @@ ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: "Total Vendas", valor: R$(relatorio.totalVendas), cor: "text-green-700" },
-                { label: "PIX", valor: R$(relatorio.totalPix), cor: "text-blue-600" },
-                { label: "Cartão", valor: R$(relatorio.totalCartao), cor: "text-purple-600" },
+                { label: "Pix QR", valor: R$(relatorio.totalPixQr), cor: "text-blue-600" },
+                { label: "Pix CNPJ (manual)", valor: R$(relatorio.totalPixCnpj), cor: "text-blue-600" },
+                { label: "Crédito", valor: R$(relatorio.totalCredito), cor: "text-purple-600" },
+                { label: "Débito", valor: R$(relatorio.totalDebito), cor: "text-purple-600" },
+                { label: "Pré-pago", valor: R$(relatorio.totalPrepago), cor: "text-purple-600" },
                 { label: "Dinheiro", valor: R$(relatorio.totalDinheiro), cor: "text-cb-amber" },
+                { label: `Manual sem conciliação (${relatorio.qtdSemConciliacao})`, valor: R$(relatorio.totalSemConciliacao), cor: "text-amber-700" },
               ].map(c => (
                 <div key={c.label} className="bg-cb-marrom/5 rounded-xl p-3">
                   <p className="text-xs text-cb-marrom/50">{c.label}</p>
@@ -418,8 +434,10 @@ ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.
                 <div className="flex justify-between"><span>Dinheiro</span><span>{R$(fechResumo.totalDinheiro)}</span></div>
                 <div className="flex justify-between"><span>Crédito</span><span>{R$(fechResumo.totalCredito)}</span></div>
                 <div className="flex justify-between"><span>Débito</span><span>{R$(fechResumo.totalDebito)}</span></div>
+                <div className="flex justify-between"><span>Pré-pago</span><span>{R$(fechResumo.totalPrepago)}</span></div>
                 <div className="flex justify-between"><span>Pix QR</span><span>{R$(fechResumo.totalPixQr)}</span></div>
                 <div className="flex justify-between"><span>Pix CNPJ (manual)</span><span>{R$(fechResumo.totalPixCnpj)}</span></div>
+                <LinhaSemConciliacao qtd={fechResumo.qtdSemConciliacao} total={fechResumo.totalSemConciliacao} />
                 {(fechResumo.totalPixDividido > 0 || fechResumo.totalCartaoDividido > 0) && (
                   <div className="flex justify-between text-cb-marrom/70">
                     <span>Conta dividida (Pix / Cartão)</span>

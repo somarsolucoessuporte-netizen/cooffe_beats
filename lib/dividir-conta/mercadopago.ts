@@ -2,6 +2,7 @@ import { MercadoPagoConfig, Payment, Point } from "mercadopago";
 import { criarPagamentoPoint, criarPixQRCode, cancelarOrderMp, cancelarPaymentIntentPoint } from "../mercadopago";
 import { ehPixQr } from "./domain";
 import type { Provedor, Resultado } from "./domain";
+import { metodoDoMp } from "../metodos-pagamento";
 
 function config() {
   const accessToken = process.env.MP_ACCESS_TOKEN;
@@ -16,7 +17,7 @@ export async function resultadoPayment(paymentId: string): Promise<Resultado> {
     paymentId: String(p.id),
     valorCentavos: Math.round(Number(p.transaction_amount) * 100),
     moeda: p.currency_id,
-    metodo: p.payment_type_id === "bank_transfer" ? "PIX" : p.payment_type_id === "debit_card" ? "CARTAO_DEBITO" : p.payment_type_id === "credit_card" ? "CARTAO_CREDITO" : "OUTRO",
+    metodo: metodoDoMp(p.payment_type_id) ?? "OUTRO",
     status: p.status === "refunded" || p.status === "charged_back" || Number(p.transaction_amount_refunded) > 0 ? "REVIEW" : p.status === "approved" ? "PAID" : p.status === "rejected" || p.status === "cancelled" ? "FAILED" : "PENDING",
   };
 }

@@ -114,6 +114,7 @@ export async function imprimirComanda(pedido: {
         PIX:            "PIX",
         CARTAO_CREDITO: "Cartão de Crédito",
         CARTAO_DEBITO:  "Cartão de Débito",
+        CARTAO_PREPAGO: "Cartão Pré-pago",
         DINHEIRO:       "Dinheiro",
         SIMULADO:       "Simulado",
       };

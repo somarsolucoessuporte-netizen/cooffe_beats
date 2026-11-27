@@ -94,12 +94,13 @@ async function copiarTexto(texto: string): Promise<boolean> {
 
 // Confirmação dupla do atendente antes de liberar o pedido pago na maquininha (ou por Pix)
 function ModalConfirmacaoManual({ onConfirmar, onFechar, pix = false }: {
-  onConfirmar: () => Promise<void>;
+  onConfirmar: (semConciliacao: boolean) => Promise<string | null>; // texto = aviso que exige nova confirmação
   onFechar: () => void;
   pix?: boolean;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   async function confirmar() {
     if (enviando) return;
@@ -107,7 +108,8 @@ function ModalConfirmacaoManual({ onConfirmar, onFechar, pix = false }: {
     setEnviando(true);
     setErroModal(null);
     try {
-      await onConfirmar();
+      var pendente = await onConfirmar(aviso !== null);
+      if (pendente) { setAviso(pendente); setEnviando(false); }
     } catch(err) {
       setErroModal(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
       setEnviando(false);
@@ -125,6 +127,12 @@ function ModalConfirmacaoManual({ onConfirmar, onFechar, pix = false }: {
           {pix ? "Confirme que o Pix da chave CNPJ caiu na conta antes de liberar o pedido." : "Confirme que o cliente realizou o pagamento na maquininha antes de liberar o pedido."}
         </p>
 
+        {aviso && (
+          <p role="alert" className="text-amber-800 bg-amber-50 border border-amber-300 rounded-xl p-3 text-base font-bold text-center">
+            ⚠️ {aviso}
+          </p>
+        )}
+
         {erroModal && (
           <p className="text-red-600 text-sm text-center">{erroModal}</p>
         )}
@@ -140,7 +148,7 @@ function ModalConfirmacaoManual({ onConfirmar, onFechar, pix = false }: {
             {enviando && (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             )}
-            {enviando ? "Liberando..." : "✅ Sim, liberar pedido"}
+            {enviando ? (pix ? "Liberando..." : "Conferindo...") : aviso ? "Vi \"Aprovado\" — liberar mesmo assim" : "✅ Sim, liberar pedido"}
           </button>
           <button
             onClick={function() { playClick(); onFechar(); }}
@@ -357,20 +365,22 @@ export default function Pagamento() {
 
   // Fallback manual: cliente pagou direto na maquininha e o atendente confirma
   // no modal de confirmação dupla. Lança erro com a mensagem da API para o modal.
-  async function confirmarManualmente() {
-    if (!pedidoRef.current) return;
-    var res   = await fetch("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, {
+  async function confirmarManualmente(semConciliacao: boolean): Promise<string | null> {
+    if (!pedidoRef.current) return null;
+    var res   = await fetchTimeout("/api/pagamentos/confirmar-manual/" + pedidoRef.current.id, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO", ...(pixManualRef.current ? { origem: "PIX_CNPJ" } : {}) }),
-    });
+      body:    JSON.stringify({ metodo: metodoRef.current === "PIX" ? "PIX" : "CARTAO", ...(pixManualRef.current ? { origem: "PIX_CNPJ" } : { semConciliacao: semConciliacao }) }),
+    }, 25000);
     var dados = await res.json();
+    if (dados.precisaConfirmar) return dados.error as string;
     if (!dados.ok) throw new Error(dados.error ?? "Erro ao confirmar pagamento");
 
     pararPolling();
     setModalManual(false);
     setModalPix(false);
     finalizar(metodoRef.current);
+    return null;
   }
 
   const criarPedido = useCallback(async function(status?: "AGUARDANDO_PAGAMENTO") {

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { calcularTempoDecorrido, formatarMoeda } from "@/lib/utils";
-import { CaixaFechadoTela, imprimirFechamento, useFecharCaixa, type CaixaFechado } from "@/components/painel/FechamentoCaixa";
+import { CaixaFechadoTela, LinhaSemConciliacao, imprimirFechamento, useFecharCaixa, type CaixaFechado } from "@/components/painel/FechamentoCaixa";
 
 interface ItemPedido {
   id: string;
@@ -59,6 +59,9 @@ type CaixaResumo = {
   totalDebito: number;
   totalPixQr: number;
   totalPixCnpj: number;
+  totalPrepago: number;
+  qtdSemConciliacao: number;
+  totalSemConciliacao: number;
   ticketMedio: number;
 };
 
@@ -421,8 +424,12 @@ export default function Pedidos() {
                   )}
                   <div className="border-t border-[#3B2415]/10 pt-2 mt-2 space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-[#3B2415]/70">PIX</span>
-                      <span>{R$(caixaResumo.totalPix)}</span>
+                      <span className="text-[#3B2415]/70">Pix QR</span>
+                      <span>{R$(caixaResumo.totalPixQr)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#3B2415]/70">Pix CNPJ (manual)</span>
+                      <span>{R$(caixaResumo.totalPixCnpj)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-[#3B2415]/70">Crédito</span>
@@ -433,8 +440,15 @@ export default function Pedidos() {
                       <span>{R$(caixaResumo.totalDebito)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
+                      <span className="text-[#3B2415]/70">Pré-pago</span>
+                      <span>{R$(caixaResumo.totalPrepago)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span className="text-[#3B2415]/70">Dinheiro</span>
                       <span>{R$(caixaResumo.totalDinheiro)}</span>
+                    </div>
+                    <div className="text-sm">
+                      <LinhaSemConciliacao qtd={caixaResumo.qtdSemConciliacao} total={caixaResumo.totalSemConciliacao} />
                     </div>
                   </div>
                 </div>

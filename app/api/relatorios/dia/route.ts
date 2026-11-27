@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { recebimentosDivididos } from "@/lib/dividir-conta/relatorios";
 import { diaSP, intervaloDias } from "@/lib/fuso";
+import { somarPorMetodo } from "@/lib/metodos-pagamento";
 
 export async function GET(req: Request) {
   const { erro, empresaId } = await getAdminSession(["ADMIN", "GERENTE"]);
@@ -31,9 +32,7 @@ export async function GET(req: Request) {
   });
 
   const totalVendas    = pedidos.reduce((acc, p) => acc + Number(p.total), 0);
-  const totalPix       = pedidos.filter(p => p.pagamento?.metodo === "PIX").reduce((acc, p) => acc + Number(p.total), 0);
-  const totalCartao    = pedidos.filter(p => ["CARTAO_CREDITO","CARTAO_DEBITO"].includes(p.pagamento?.metodo ?? "")).reduce((acc, p) => acc + Number(p.total), 0);
-  const totalDinheiro  = pedidos.filter(p => p.pagamento?.metodo === "DINHEIRO").reduce((acc, p) => acc + Number(p.total), 0);
+  const s = somarPorMetodo(pedidos);
   const totalSimulado  = pedidos.filter(p => p.pagamento?.metodo === "SIMULADO").reduce((acc, p) => acc + Number(p.total), 0);
   const cancelados     = await prisma.pedido.count({ where: { empresaId, criadoEm: { gte: inicio, lte: fim }, status: "CANCELADO" } });
 
@@ -66,9 +65,16 @@ export async function GET(req: Request) {
     totalPedidos: pedidos.length,
     cancelados,
     totalVendas,
-    totalPix: totalPix + divisao.totalPix,
-    totalCartao: totalCartao + divisao.totalCartao,
-    totalDinheiro,
+    totalPix: s.pixQr + s.pixCnpj + divisao.totalPix,
+    totalCartao: s.credito + s.debito + s.prepago + divisao.totalCartao,
+    totalCredito: s.credito + divisao.totalCredito,
+    totalDebito: s.debito + divisao.totalDebito,
+    totalPrepago: s.prepago + divisao.totalPrepago,
+    totalPixQr: s.pixQr + divisao.totalPixQr,
+    totalPixCnpj: s.pixCnpj + divisao.totalPixCnpj,
+    qtdSemConciliacao: s.qtdSemConciliacao,
+    totalSemConciliacao: s.semConciliacao,
+    totalDinheiro: s.dinheiro,
     totalSimulado,
     topProdutos,
     extrato,

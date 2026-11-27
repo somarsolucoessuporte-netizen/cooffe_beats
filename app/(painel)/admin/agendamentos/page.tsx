@@ -22,6 +22,7 @@ const STATUS_INFO: Record<string, { label: string; cor: string }> = {
   CONFIRMADO: { label: "Confirmado", cor: "bg-green-100 text-green-700" },
   CANCELADO:  { label: "Cancelado",  cor: "bg-red-100 text-red-600" },
   CONCLUIDO:  { label: "Concluído",  cor: "bg-gray-100 text-gray-500" },
+  NAO_COMPARECEU: { label: "Expirada / não compareceu", cor: "bg-gray-100 text-gray-500" },
 };
 
 function formatarData(s: string) {
@@ -175,7 +176,7 @@ export default function AgendamentosPage() {
                         ✓ Confirmar
                       </button>
                     )}
-                    {ag.status !== "CANCELADO" && ag.status !== "CONCLUIDO" && (
+                    {ag.status !== "CANCELADO" && ag.status !== "CONCLUIDO" && ag.status !== "NAO_COMPARECEU" && (
                       <button
                         onClick={function() { alterarStatus(ag.id, "CANCELADO"); }}
                         className="text-xs border border-red-200 text-red-500 px-3 py-1.5 rounded-xl hover:bg-red-50"

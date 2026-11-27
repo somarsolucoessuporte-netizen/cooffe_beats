@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verificarPagamentoPoint, consultarOrderMp, cancelarOrderMp, cancelarPaymentIntentPoint, type ResultadoPagamentoMp } from "@/lib/mercadopago";
 import { liberarPedidoPago } from "@/lib/liberar-pedido";
 import { criarPedidoDaSessao } from "@/lib/checkout-sessao";
+import { metodoDoMp } from "@/lib/metodos-pagamento";
 
 /** Dados do Mercado Pago gravados em Pagamento.payload na criação da cobrança. */
 export interface PayloadMp {
@@ -44,13 +45,10 @@ export async function aplicarResultadoMp(
       where:  { referencia },
       select: { pedidoId: true, status: true, payload: true, pixOrderId: true, confirmadoManualmente: true },
     });
-    const mpAntes = (antes?.payload ?? null) as (PayloadMp & { aprovadoPor?: string; origem?: string }) | null;
+    const mpAntes = (antes?.payload ?? null) as (PayloadMp & { aprovadoPor?: string; origem?: string; paymentId?: string }) | null;
 
     // Na Point o cliente escolhe a forma na maquininha: grava o tipo real quando o MP informa
-    const metodo: MetodoPagamento | undefined =
-      resultado.tipo === "bank_transfer" ? "PIX" :
-      resultado.tipo === "debit_card"    ? "CARTAO_DEBITO" :
-      resultado.tipo === "credit_card"   ? "CARTAO_CREDITO" : undefined;
+    const metodo: MetodoPagamento | undefined = metodoDoMp(resultado.tipo);
     const dadosPayload: Prisma.InputJsonObject = {
       ...payload,
       ...(origem ? { aprovadoPor: origem } : {}),
@@ -63,12 +61,19 @@ export async function aplicarResultadoMp(
       data:  { status: "APROVADO", paidAt: new Date(), payload: dadosPayload, ...(metodo ? { metodo } : {}) },
     });
 
-    // Confirmado no totem pelo atendente e só depois aprovado na Point: corrige apenas o método
-    if (result.count === 0 && metodo && origem !== "qr" && antes?.confirmadoManualmente
-        && !mpAntes?.aprovadoPor && mpAntes?.origem !== "PIX_CNPJ_ESTATICO") {
+    // Confirmado no totem pelo atendente e só depois aprovado na Point: concilia e corrige o método
+    const manual = result.count === 0 && !!resultado.paymentId && origem !== "qr" && !!antes?.confirmadoManualmente
+      && !mpAntes?.aprovadoPor && mpAntes?.origem !== "PIX_CNPJ_ESTATICO";
+    if (manual && mpAntes?.paymentId && mpAntes.paymentId !== resultado.paymentId) {
+      // Já conciliado com outro pagamento: não sobrescreve, só avisa
+      console.error(`POSSÍVEL PAGAMENTO DUPLICADO - pedido ${antes?.pedidoId} - conferir | vinculado=${mpAntes.paymentId} novo=${resultado.paymentId}`);
+    } else if (manual) {
       await prisma.pagamento.updateMany({
-        where: { referencia, status: "APROVADO", confirmadoManualmente: true, metodo: { not: metodo } },
-        data:  { metodo },
+        where: { referencia, status: "APROVADO", confirmadoManualmente: true },
+        data:  {
+          ...(metodo ? { metodo } : {}),
+          payload: { ...(mpAntes as Prisma.InputJsonObject | null), paymentId: resultado.paymentId, tipo: resultado.tipo ?? null, conciliacao: "vinculado_mp" },
+        },
       });
     }
 
@@ -167,9 +172,7 @@ export async function aplicarPagamentoCheckoutPro(resultado: ResultadoPagamentoM
   if (!sessao) return false;
 
   if (resultado.status === "PAID") {
-    const metodo: MetodoPagamento =
-      resultado.tipo === "debit_card"  ? "CARTAO_DEBITO"  :
-      resultado.tipo === "credit_card" ? "CARTAO_CREDITO" : "PIX";
+    const metodo: MetodoPagamento = metodoDoMp(resultado.tipo) ?? "PIX";
     await criarPedidoDaSessao(sessao.id, {
       metodo,
       payload: { provider: "mercadopago", checkoutPro: true, ...resultado, evento: (evento ?? null) as Prisma.InputJsonValue },

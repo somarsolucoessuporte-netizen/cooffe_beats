@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { formatarMoeda } from "@/lib/utils";
+import { somarPorMetodo } from "@/lib/metodos-pagamento";
 import { diaSP, horaSP, somaDias } from "@/lib/fuso";
 
 interface MetricasDia {
@@ -21,6 +22,7 @@ interface MetricasDia {
   produtoMaisVendido: { nome: string; quantidade: number } | null;
   horaPico: string | null;
   pedidosPorHora: Array<{ hora: string; pedidos: number }>;
+  porMetodo: Array<[string, number]>;
 }
 
 type FiltroData = "hoje" | "ontem" | "7dias";
@@ -44,6 +46,7 @@ export default function Dashboard() {
         criadoEm: string;
         total: string;
         status: string;
+        pagamento?: { metodo: string; status: string; payload?: unknown } | null;
         itens: Array<{ produto: { nome: string }; quantidade: number }>;
       }>;
 
@@ -81,7 +84,17 @@ export default function Dashboard() {
 
       const horaPico = pedidosPorHora.sort((a, b) => b.pedidos - a.pedidos)[0]?.hora ?? null;
 
+      const m = somarPorMetodo(aprovados);
+      // O que não tem pagamento integral aprovado (ex.: conta dividida) fica em linha própria
+      const resto = faturamento - (m.dinheiro + m.credito + m.debito + m.prepago + m.pixQr + m.pixCnpj);
+      const porMetodo: Array<[string, number]> = [
+        ["Dinheiro", m.dinheiro], ["Crédito", m.credito], ["Débito", m.debito], ["Pré-pago", m.prepago],
+        ["Pix QR", m.pixQr], ["Pix CNPJ (manual)", m.pixCnpj], ["Conta dividida / outros", Math.max(0, resto)],
+        [`Manual sem conciliação (${m.qtdSemConciliacao}), já incluído acima`, m.semConciliacao],
+      ];
+
       setMetricas({
+        porMetodo,
         totalPedidos: aprovados.length,
         faturamento,
         ticketMedio,
@@ -157,6 +170,20 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+
+            {metricas && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <h2 className="text-zinc-200 font-semibold mb-4">Por método de pagamento</h2>
+                <div className="flex flex-col gap-2">
+                  {metricas.porMetodo.map(([nome, valor]) => (
+                    <div key={nome} className="flex justify-between gap-4 text-sm border-b border-zinc-800 last:border-0 pb-2">
+                      <span className="text-zinc-400">{nome}</span>
+                      <span className="text-zinc-100 font-semibold">{formatarMoeda(valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Gráfico */}
             {metricas && metricas.pedidosPorHora.length > 0 && (

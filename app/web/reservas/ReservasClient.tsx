@@ -29,6 +29,7 @@ const STATUS_LABEL: Record<string, string> = {
   PENDENTE:   "Aguardando confirmação",
   CONFIRMADO: "Confirmado",
   CANCELADO:  "Cancelado",
+  NAO_COMPARECEU: "Expirada / não compareceu",
 };
 
 const STATUS_COR: Record<string, string> = {

@@ -44,6 +44,9 @@ export async function montarRelatorio(empresaId: string, inicio: string, fim: st
         COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.metodo='DINHEIRO'),0)::float8 AS dinheiro,
         COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.metodo='CARTAO_CREDITO'),0)::float8 AS credito,
         COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.metodo='CARTAO_DEBITO'),0)::float8 AS debito,
+        COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.metodo='CARTAO_PREPAGO'),0)::float8 AS prepago,
+        COUNT(*) FILTER (WHERE pg.status='APROVADO' AND pg.payload->>'conciliacao'='manual_sem_conciliacao')::int AS "qtdSemConc",
+        COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.payload->>'conciliacao'='manual_sem_conciliacao'),0)::float8 AS "semConc",
         COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.metodo='PIX' AND COALESCE(pg.payload->>'origem','')<>'PIX_CNPJ_ESTATICO'),0)::float8 AS "pixQr",
         COALESCE(SUM(p.total) FILTER (WHERE pg.status='APROVADO' AND pg.metodo='PIX' AND pg.payload->>'origem'='PIX_CNPJ_ESTATICO'),0)::float8 AS "pixCnpj",
         COALESCE(SUM(d.v),0)::float8 AS dividida
@@ -54,13 +57,13 @@ export async function montarRelatorio(empresaId: string, inicio: string, fim: st
   }
   const soma = (k: string) => r2(porDia.reduce((s, d) => s + Number(d[k] ?? 0), 0));
   if (quer("vendas-dia")) {
-    secoes.push({ id: "vendas-dia", nome: "Vendas por dia", colunas: ["Dia", "Pedidos", "Total vendas", "Dinheiro", "Crédito", "Débito", "Pix QR", "Pix CNPJ (manual)", "Conta dividida"],
-      linhas: [...porDia.map(d => [String(d.dia).split("-").reverse().join("/"), Number(d.pedidos), r2(d.vendas), r2(d.dinheiro), r2(d.credito), r2(d.debito), r2(d.pixQr), r2(d.pixCnpj), r2(d.dividida)]),
-        ["TOTAL", porDia.reduce((s, d) => s + Number(d.pedidos), 0), soma("vendas"), soma("dinheiro"), soma("credito"), soma("debito"), soma("pixQr"), soma("pixCnpj"), soma("dividida")]] });
+    secoes.push({ id: "vendas-dia", nome: "Vendas por dia", colunas: ["Dia", "Pedidos", "Total vendas", "Dinheiro", "Crédito", "Débito", "Pré-pago", "Pix QR", "Pix CNPJ (manual)", "Conta dividida", "Manual sem conciliação (qtd)", "Manual sem conciliação (valor)"],
+      linhas: [...porDia.map(d => [String(d.dia).split("-").reverse().join("/"), Number(d.pedidos), r2(d.vendas), r2(d.dinheiro), r2(d.credito), r2(d.debito), r2(d.prepago), r2(d.pixQr), r2(d.pixCnpj), r2(d.dividida), Number(d.qtdSemConc), r2(d.semConc)]),
+        ["TOTAL", porDia.reduce((s, d) => s + Number(d.pedidos), 0), soma("vendas"), soma("dinheiro"), soma("credito"), soma("debito"), soma("prepago"), soma("pixQr"), soma("pixCnpj"), soma("dividida"), soma("qtdSemConc"), soma("semConc")]] });
   }
   if (quer("metodos")) {
     secoes.push({ id: "metodos", nome: "Por método de pagamento", colunas: ["Método", "Total recebido"],
-      linhas: [["Dinheiro", soma("dinheiro")], ["Cartão de crédito", soma("credito")], ["Cartão de débito", soma("debito")], ["Pix QR", soma("pixQr")], ["Pix CNPJ (manual)", soma("pixCnpj")], ["Conta dividida (todos os meios)", soma("dividida")]] });
+      linhas: [["Dinheiro", soma("dinheiro")], ["Cartão de crédito", soma("credito")], ["Cartão de débito", soma("debito")], ["Cartão pré-pago", soma("prepago")], ["Pix QR", soma("pixQr")], ["Pix CNPJ (manual)", soma("pixCnpj")], ["Conta dividida (todos os meios)", soma("dividida")], [`Manual sem conciliação (${soma("qtdSemConc")}), já incluído acima`, soma("semConc")]] });
   }
 
   if (quer("pedidos")) {
@@ -110,9 +113,9 @@ export async function montarRelatorio(empresaId: string, inicio: string, fim: st
     for (const c of caixas) {
       const t = await resumoCaixa(empresaId, c.id).catch(() => null);
       linhas.push([dataHora(c.abertura), c.fechamento ? dataHora(c.fechamento) : "—", c.status, c.operador ?? "", r2(c.valorAbertura), c.valorFechamento == null ? "" : r2(c.valorFechamento),
-        t?.totalPedidos ?? "", t?.totalVendas ?? "", t?.totalDinheiro ?? "", t?.totalCredito ?? "", t?.totalDebito ?? "", t?.totalPixQr ?? "", t?.totalPixCnpj ?? "", c.observacao ?? ""]);
+        t?.totalPedidos ?? "", t?.totalVendas ?? "", t?.totalDinheiro ?? "", t?.totalCredito ?? "", t?.totalDebito ?? "", t?.totalPrepago ?? "", t?.totalPixQr ?? "", t?.totalPixCnpj ?? "", t?.qtdSemConciliacao ?? "", t?.totalSemConciliacao ?? "", c.observacao ?? ""]);
     }
-    secoes.push({ id: "caixas", nome: "Fechamentos de caixa", colunas: ["Abertura", "Fechamento", "Status", "Operador", "Troco inicial", "Valor fechamento", "Pedidos", "Total vendas", "Dinheiro", "Crédito", "Débito", "Pix QR", "Pix CNPJ (manual)", "Observações / pendências"], linhas });
+    secoes.push({ id: "caixas", nome: "Fechamentos de caixa", colunas: ["Abertura", "Fechamento", "Status", "Operador", "Troco inicial", "Valor fechamento", "Pedidos", "Total vendas", "Dinheiro", "Crédito", "Débito", "Pré-pago", "Pix QR", "Pix CNPJ (manual)", "Manual sem conciliação (qtd)", "Manual sem conciliação (valor)", "Observações / pendências"], linhas });
   }
 
   if (quer("chamados")) {

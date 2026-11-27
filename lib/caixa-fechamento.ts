@@ -4,6 +4,7 @@ import { divisao } from "@/lib/dividir-conta/runtime";
 import { lock } from "@/lib/dividir-conta/service";
 import { recebimentosDivididos } from "@/lib/dividir-conta/relatorios";
 import { cancelarPagamentoPoint, cancelarOrderMp } from "@/lib/mercadopago";
+import { somarPorMetodo } from "@/lib/metodos-pagamento";
 
 /** Pendência sem nenhum pagamento recebido e parada há mais que isto é considerada abandonada. */
 const EXPIRA_MIN = 120;
@@ -28,6 +29,10 @@ export type ResumoCaixa = {
   totalDinheiro: number;
   totalCredito: number;
   totalDebito: number;
+  totalPrepago: number;
+  /** Confirmados no totem sem pagamento no Mercado Pago (já incluídos nos totais por método). */
+  qtdSemConciliacao: number;
+  totalSemConciliacao: number;
   totalPixQr: number;
   totalPixCnpj: number;
   totalPixDividido: number;
@@ -50,33 +55,26 @@ export async function resumoCaixa(empresaId: string, caixaId: string): Promise<R
   });
   const div = await recebimentosDivididos(empresaId, { caixaId });
 
-  let dinheiro = 0, credito = 0, debito = 0, pixQr = 0, pixCnpj = 0, vendas = 0;
-  for (const p of pedidos) {
-    const total = Number(p.total);
-    vendas += total;
-    const pg = p.pagamento;
-    if (!pg || pg.status !== "APROVADO") continue;
-    const origem = (pg.payload as { origem?: string } | null)?.origem;
-    if (pg.metodo === "DINHEIRO") dinheiro += total;
-    else if (pg.metodo === "CARTAO_CREDITO") credito += total;
-    else if (pg.metodo === "CARTAO_DEBITO") debito += total;
-    else if (pg.metodo === "PIX") { if (origem === "PIX_CNPJ_ESTATICO") pixCnpj += total; else pixQr += total; }
-  }
+  const s = somarPorMetodo(pedidos);
+  const vendas = pedidos.reduce((acc, p) => acc + Number(p.total), 0);
   return {
     totalPedidos: pedidos.length,
     totalVendas: r2(vendas),
-    totalDinheiro: r2(dinheiro),
-    totalCredito: r2(credito + div.totalCredito),
-    totalDebito: r2(debito + div.totalDebito),
-    totalPixQr: r2(pixQr + div.totalPixQr),
-    totalPixCnpj: r2(pixCnpj + div.totalPixCnpj),
+    totalDinheiro: r2(s.dinheiro),
+    totalCredito: r2(s.credito + div.totalCredito),
+    totalDebito: r2(s.debito + div.totalDebito),
+    totalPrepago: r2(s.prepago + div.totalPrepago),
+    qtdSemConciliacao: s.qtdSemConciliacao,
+    totalSemConciliacao: r2(s.semConciliacao),
+    totalPixQr: r2(s.pixQr + div.totalPixQr),
+    totalPixCnpj: r2(s.pixCnpj + div.totalPixCnpj),
     totalPixDividido: r2(div.totalPix),
     totalCartaoDividido: r2(div.totalCartao),
     totalCreditoDividido: r2(div.totalCredito),
     totalDebitoDividido: r2(div.totalDebito),
     totalPixCnpjDividido: r2(div.totalPixCnpj),
-    totalPix: r2(pixQr + pixCnpj + div.totalPix),
-    totalCartao: r2(credito + debito + div.totalCartao),
+    totalPix: r2(s.pixQr + s.pixCnpj + div.totalPix),
+    totalCartao: r2(s.credito + s.debito + s.prepago + div.totalCartao),
     ticketMedio: pedidos.length ? r2(vendas / pedidos.length) : 0,
     divisao: div,
   };

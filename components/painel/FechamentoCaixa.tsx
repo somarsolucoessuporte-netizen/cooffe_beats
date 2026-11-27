@@ -9,7 +9,8 @@ export type Pendencia = {
 
 export type CaixaFechado = {
   caixaId: string; totalPedidos: number; totalVendas: number; totalDinheiro: number; totalCredito: number;
-  totalDebito: number; totalPixQr: number; totalPixCnpj: number;
+  totalDebito: number; totalPrepago: number; totalPixQr: number; totalPixCnpj: number;
+  qtdSemConciliacao: number; totalSemConciliacao: number;
   abertoEm: string; fechadoEm: string | null; valorAbertura: number; jaFechado: boolean;
 };
 
@@ -72,6 +73,7 @@ const linhasPorMetodo = (r: CaixaFechado): [string, number][] => [
   ["Dinheiro", r.totalDinheiro],
   ["Crédito", r.totalCredito],
   ["Débito", r.totalDebito],
+  ["Pré-pago", r.totalPrepago],
   ["Pix QR", r.totalPixQr],
   ["Pix CNPJ (manual)", r.totalPixCnpj],
 ];
@@ -92,6 +94,8 @@ ${linha("Pedidos:", String(r.totalPedidos))}
 <div class="bold">${linha("TOTAL VENDAS:", R$(r.totalVendas))}</div>
 ${linhasPorMetodo(r).map(([rotulo, v]) => linha(rotulo + ":", R$(v))).join("")}
 <div class="sep"></div>
+${linha(`Manual sem conciliação (${r.qtdSemConciliacao}):`, R$(r.totalSemConciliacao))}
+<div class="sep"></div>
 <div style="text-align:center;font-size:10px">${new Date().toLocaleString("pt-BR")}</div>
 </body></html>`;
   try {
@@ -108,6 +112,15 @@ ${linhasPorMetodo(r).map(([rotulo, v]) => linha(rotulo + ":", R$(v))).join("")}
       setTimeout(() => iframe.remove(), 1000);
     }, 500);
   } catch { aoFalhar(); }
+}
+
+export function LinhaSemConciliacao({ qtd, total }: { qtd: number; total: number }) {
+  return (
+    <div className={`border-t border-[#3B2415]/10 pt-1.5 mt-1 flex justify-between gap-3 ${qtd ? "text-amber-700 font-bold" : "text-[#3B2415]/60"}`}>
+      <span>Manual sem conciliação ({qtd}) <span className="block text-xs font-normal">já incluído nos valores acima</span></span>
+      <span>{R$(total)}</span>
+    </div>
+  );
 }
 
 export function CaixaFechadoTela({ resumo, onAbrirNovo, onVoltar }: {
@@ -134,6 +147,7 @@ export function CaixaFechadoTela({ resumo, onAbrirNovo, onVoltar }: {
           {linhasPorMetodo(resumo).map(([rotulo, valor]) => (
             <div key={rotulo} className="flex justify-between"><span>{rotulo}</span><span>{R$(valor)}</span></div>
           ))}
+          <LinhaSemConciliacao qtd={resumo.qtdSemConciliacao} total={resumo.totalSemConciliacao} />
         </div>
 
         {avisoImpressao && <p role="alert" className="text-sm font-medium px-3 py-2 rounded-xl bg-amber-50 text-amber-700">{avisoImpressao}</p>}
