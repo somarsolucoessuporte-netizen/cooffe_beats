@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
 import { recebimentosDivididos } from "@/lib/dividir-conta/relatorios";
+import { diaSP, intervaloDias } from "@/lib/fuso";
 
 export async function GET(req: Request) {
   const { erro, empresaId } = await getAdminSession(["ADMIN", "GERENTE"]);
@@ -10,18 +11,15 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const dataParam = searchParams.get("data");
 
-  const data = dataParam ? new Date(dataParam) : new Date();
-  const inicio = new Date(data);
-  inicio.setHours(0, 0, 0, 0);
-  const fim = new Date(data);
-  fim.setHours(23, 59, 59, 999);
+  const dia = dataParam && /^\d{4}-\d{2}-\d{2}$/.test(dataParam) ? dataParam : diaSP();
+  const { inicio, fim } = intervaloDias(dia);
   const divisao = await recebimentosDivididos(empresaId, { inicio, fim });
 
   const pedidos = await prisma.pedido.findMany({
     where: {
       empresaId,
       criadoEm: { gte: inicio, lte: fim },
-      status: { notIn: ["CANCELADO"] },
+      status: { notIn: ["CANCELADO", "AGUARDANDO_PAGAMENTO"] },
     },
     include: {
       pagamento: true,
@@ -64,7 +62,7 @@ export async function GET(req: Request) {
   }));
 
   return resposta({
-    data: inicio.toISOString().slice(0, 10),
+    data: dia,
     totalPedidos: pedidos.length,
     cancelados,
     totalVendas,

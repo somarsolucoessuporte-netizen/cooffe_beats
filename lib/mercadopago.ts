@@ -82,6 +82,7 @@ export async function verificarPagamentoPoint(paymentIntentId: string): Promise<
   status:      "PENDING" | "PAID" | "FAILED";
   referencia?: string;
   paymentId?:  string;
+  tipo?:       string; // payment_type_id do pagamento aprovado
   state?:      string;
 }> {
   const intent = await new Point(config()).searchPaymentIntent({ payment_intent_id: paymentIntentId });
@@ -97,7 +98,7 @@ export async function verificarPagamentoPoint(paymentIntentId: string): Promise<
   if (paymentId) {
     const pagamento = await new Payment(config()).get({ id: paymentId });
     if (pagamento.status === "approved") {
-      return { status: "PAID", referencia, paymentId: String(paymentId), state };
+      return { status: "PAID", referencia, paymentId: String(paymentId), tipo: pagamento.payment_type_id, state };
     }
     if (pagamento.status === "rejected" || pagamento.status === "cancelled") {
       return { status: "FAILED", referencia, paymentId: String(paymentId), state };

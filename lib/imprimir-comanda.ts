@@ -164,7 +164,7 @@ export async function imprimirComanda(pedido: {
       itensHtml +
       totalHtml +
       msgHtml +
-      '<div class="footer">' + new Date().toLocaleString("pt-BR") + '</div>' +
+      '<div class="footer">' + new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) + '</div>' +
       "</body></html>";
 
     renderIframe(html);

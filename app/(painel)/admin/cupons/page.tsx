@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useConfirmar } from "@/components/painel/Confirmacao";
+import { fimValidade, FUSO } from "@/lib/fuso";
 
 interface Cupom {
   id:           string;
@@ -30,7 +31,7 @@ function formatarValor(tipo: string, valor: number) {
 
 function formatarData(s: string | null) {
   if (!s) return "—";
-  return new Date(s).toLocaleDateString("pt-BR");
+  return fimValidade(s).toLocaleDateString("pt-BR", { timeZone: FUSO });
 }
 
 export default function CuponsPage() {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { campoDataHoraSP, FUSO } from "@/lib/fuso";
 
 interface Mesa {
   id:     string;
@@ -37,9 +38,7 @@ const STATUS_COR: Record<string, string> = {
 };
 
 function toLocalDatetimeValue(offset = 0): string {
-  var d = new Date(Date.now() + offset);
-  var pad = function (n: number) { return n.toString().padStart(2, "0"); };
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return campoDataHoraSP(Date.now() + offset);
 }
 
 export default function ReservasClient({ clienteNome, clienteWhatsapp, mesas }: Props) {
@@ -255,6 +254,7 @@ export default function ReservasClient({ clienteNome, clienteWhatsapp, mesas }: 
             <div className="flex flex-col gap-3">
               {agendamentos.map(function (ag) {
                 var dataFmt = new Date(ag.data).toLocaleString("pt-BR", {
+                  timeZone: FUSO,
                   weekday: "short",
                   day: "2-digit",
                   month: "short",

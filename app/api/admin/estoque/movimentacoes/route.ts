@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { intervaloDias } from "@/lib/fuso";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
@@ -26,8 +27,8 @@ export async function GET(req: NextRequest) {
       ...(origem     ? { origem }                        : {}),
       ...(dataInicio || dataFim ? {
         createdAt: {
-          ...(dataInicio ? { gte: new Date(dataInicio) } : {}),
-          ...(dataFim    ? { lte: new Date(dataFim)    } : {}),
+          ...(dataInicio ? { gte: dataInicio.length === 10 ? intervaloDias(dataInicio).inicio : new Date(dataInicio) } : {}),
+          ...(dataFim    ? { lte: dataFim.length === 10 ? intervaloDias(dataFim).fim : new Date(dataFim) } : {}),
         },
       } : {}),
     },

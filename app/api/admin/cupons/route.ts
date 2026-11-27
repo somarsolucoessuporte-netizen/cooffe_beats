@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { intervaloDias } from "@/lib/fuso";
 
 const CriarCupomSchema = z.object({
   codigo:       z.string().min(2).transform((s) => s.toUpperCase()),
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
         tipo,
         valor,
         usoMaximo:    usoMaximo ?? null,
-        validoAte:    validoAte ? new Date(validoAte) : null,
+        validoAte:    validoAte ? (validoAte.length === 10 ? intervaloDias(validoAte).fim : new Date(validoAte)) : null,
         pedidoMinimo: pedidoMinimo ?? null,
       },
     });

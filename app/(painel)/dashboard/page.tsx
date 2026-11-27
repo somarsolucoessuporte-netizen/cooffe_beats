@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { formatarMoeda } from "@/lib/utils";
+import { diaSP, horaSP, somaDias } from "@/lib/fuso";
 
 interface MetricasDia {
   totalPedidos: number;
@@ -46,21 +47,15 @@ export default function Dashboard() {
         itens: Array<{ produto: { nome: string }; quantidade: number }>;
       }>;
 
-      const agora = new Date();
+      const hoje = diaSP();
       const filtrado = todos.filter((p) => {
-        const d = new Date(p.criadoEm);
-        if (filtro === "hoje") return d.toDateString() === agora.toDateString();
-        if (filtro === "ontem") {
-          const ontem = new Date(agora);
-          ontem.setDate(agora.getDate() - 1);
-          return d.toDateString() === ontem.toDateString();
-        }
-        const semana = new Date(agora);
-        semana.setDate(agora.getDate() - 7);
-        return d >= semana;
+        const dia = diaSP(p.criadoEm);
+        if (filtro === "hoje") return dia === hoje;
+        if (filtro === "ontem") return dia === somaDias(hoje, -1);
+        return dia >= somaDias(hoje, -6) && dia <= hoje;
       });
 
-      const aprovados = filtrado.filter((p) => p.status !== "CANCELADO");
+      const aprovados = filtrado.filter((p) => p.status !== "CANCELADO" && p.status !== "AGUARDANDO_PAGAMENTO");
       const faturamento = aprovados.reduce((s, p) => s + parseFloat(p.total), 0);
       const ticketMedio = aprovados.length > 0 ? faturamento / aprovados.length : 0;
 
@@ -76,7 +71,7 @@ export default function Dashboard() {
       // Pedidos por hora
       const porHora: Record<string, number> = {};
       aprovados.forEach((p) => {
-        const h = new Date(p.criadoEm).getHours();
+        const h = horaSP(p.criadoEm);
         const label = `${String(h).padStart(2, "0")}h`;
         porHora[label] = (porHora[label] ?? 0) + 1;
       });

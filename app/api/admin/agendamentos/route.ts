@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { intervaloDias } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
   const { erro } = await getAdminSession(["ADMIN", "GERENTE"]);
@@ -14,10 +15,8 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = {};
     if (status) where.status = status;
     if (data) {
-      const dia   = new Date(data);
-      const amanha = new Date(dia);
-      amanha.setDate(amanha.getDate() + 1);
-      where.data = { gte: dia, lt: amanha };
+      const { inicio, fim } = intervaloDias(data);
+      where.data = { gte: inicio, lte: fim };
     }
 
     const agendamentos = await prisma.agendamento.findMany({

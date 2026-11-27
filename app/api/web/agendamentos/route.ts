@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getWebSession } from "@/lib/web-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { dataHoraSP } from "@/lib/fuso";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   const { data, duracao, pessoas, mesaId, observacao } = valid.data;
 
-  const dataAgendada = new Date(data);
+  const dataAgendada = dataHoraSP(data);
   if (dataAgendada < new Date()) {
     return erroResposta("A data do agendamento deve ser no futuro");
   }

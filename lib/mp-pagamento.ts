@@ -42,9 +42,9 @@ export async function aplicarResultadoMp(
     // Estado anterior: Point guarda paymentIntentId/deviceId no payload (sobrescrito pela baixa)
     const antes = await prisma.pagamento.findFirst({
       where:  { referencia },
-      select: { pedidoId: true, status: true, payload: true, pixOrderId: true },
+      select: { pedidoId: true, status: true, payload: true, pixOrderId: true, confirmadoManualmente: true },
     });
-    const mpAntes = (antes?.payload ?? null) as (PayloadMp & { aprovadoPor?: string }) | null;
+    const mpAntes = (antes?.payload ?? null) as (PayloadMp & { aprovadoPor?: string; origem?: string }) | null;
 
     // Na Point o cliente escolhe a forma na maquininha: grava o tipo real quando o MP informa
     const metodo: MetodoPagamento | undefined =
@@ -62,6 +62,15 @@ export async function aplicarResultadoMp(
       where: { referencia, status: { not: "APROVADO" } },
       data:  { status: "APROVADO", paidAt: new Date(), payload: dadosPayload, ...(metodo ? { metodo } : {}) },
     });
+
+    // Confirmado no totem pelo atendente e só depois aprovado na Point: corrige apenas o método
+    if (result.count === 0 && metodo && origem !== "qr" && antes?.confirmadoManualmente
+        && !mpAntes?.aprovadoPor && mpAntes?.origem !== "PIX_CNPJ_ESTATICO") {
+      await prisma.pagamento.updateMany({
+        where: { referencia, status: "APROVADO", confirmadoManualmente: true, metodo: { not: metodo } },
+        data:  { metodo },
+      });
+    }
 
     if (result.count > 0) {
       primeiraBaixa = true;

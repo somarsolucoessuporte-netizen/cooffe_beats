@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { dataHoraSP } from "@/lib/fuso";
 
 const Schema = z.object({
   empresaId:   z.string(),
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
         empresaId:   v.data.empresaId,
         nomeCliente: v.data.nomeCliente,
         telefone:    v.data.telefone.replace(/\D/g, ""),
-        data:        new Date(v.data.data),
+        data:        dataHoraSP(v.data.data),
         duracao:     v.data.duracao,
         pessoas:     v.data.pessoas,
         mesaId:      v.data.mesaId ?? null,

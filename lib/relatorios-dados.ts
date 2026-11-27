@@ -24,7 +24,7 @@ export function periodoUtc(inicio: string, fim: string) {
   const b = new Date(`${fim}T23:59:59.999-03:00`);
   if (isNaN(a.getTime()) || isNaN(b.getTime()) || a > b) throw new Error("Período inválido");
   if (b.getTime() - a.getTime() > 400 * 86400000) throw new Error("Período máximo: 400 dias");
-  return { ini: a.toISOString().slice(0, 19).replace("T", " "), fim: b.toISOString().slice(0, 19).replace("T", " ") };
+  return { ini: a.toISOString().slice(0, 23).replace("T", " "), fim: b.toISOString().slice(0, 23).replace("T", " ") };
 }
 
 const q = <T,>(sql: string, p: unknown[]) => prisma.$queryRawUnsafe<T[]>(sql, ...p);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { FUSO } from "@/lib/fuso";
 
 interface Agendamento {
   id:          string;
@@ -25,7 +26,7 @@ const STATUS_INFO: Record<string, { label: string; cor: string }> = {
 
 function formatarData(s: string) {
   const d = new Date(s);
-  return d.toLocaleDateString("pt-BR") + " às " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("pt-BR", { timeZone: FUSO }) + " às " + d.toLocaleTimeString("pt-BR", { timeZone: FUSO, hour: "2-digit", minute: "2-digit" });
 }
 
 function formatarTel(t: string) {
@@ -159,7 +160,7 @@ export default function AgendamentosPage() {
 
                   <div className="shrink-0 flex flex-col gap-2">
                     <a
-                      href={`https://wa.me/${ag.telefone.replace(/\D/g, "")}?text=${encodeURIComponent("Olá " + ag.nomeCliente + "! Seu agendamento para " + new Date(ag.data).toLocaleDateString("pt-BR") + " está confirmado. ☕")}`}
+                      href={`https://wa.me/${ag.telefone.replace(/\D/g, "")}?text=${encodeURIComponent("Olá " + ag.nomeCliente + "! Seu agendamento para " + new Date(ag.data).toLocaleDateString("pt-BR", { timeZone: FUSO }) + " está confirmado. ☕")}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-xl text-center hover:bg-green-600"

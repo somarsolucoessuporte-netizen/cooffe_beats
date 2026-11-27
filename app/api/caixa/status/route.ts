@@ -4,6 +4,7 @@ import { resposta, erroResposta } from "@/lib/api-response";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { resumoCaixa } from "@/lib/caixa-fechamento";
+import { diaSP, intervaloDias } from "@/lib/fuso";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -29,8 +30,7 @@ export async function GET(req: NextRequest) {
   // Abertura pelo painel nunca grava operadorNome; pelo totem, sempre grava
   const origem = caixa.operadorNome ? "TOTEM" : "PAINEL";
 
-  const inicioDoDia = new Date();
-  inicioDoDia.setHours(0, 0, 0, 0);
+  const inicioDoDia = intervaloDias(diaSP()).inicio;
 
   return resposta({
     aberto:        true,

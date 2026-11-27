@@ -425,8 +425,12 @@ export default function Pedidos() {
                       <span>{R$(caixaResumo.totalPix)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-[#3B2415]/70">Cartão</span>
-                      <span>{R$(caixaResumo.totalCartao)}</span>
+                      <span className="text-[#3B2415]/70">Crédito</span>
+                      <span>{R$(caixaResumo.totalCredito)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#3B2415]/70">Débito</span>
+                      <span>{R$(caixaResumo.totalDebito)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-[#3B2415]/70">Dinheiro</span>

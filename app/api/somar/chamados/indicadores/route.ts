@@ -13,7 +13,7 @@ export async function GET() {
              AVG(EXTRACT(EPOCH FROM ("resolvidoEm" - "abertoEm"))) FILTER (WHERE "resolvidoEm" IS NOT NULL)::float AS "solucaoSeg"
       FROM "Chamado"`);
     const porMotivo = await q<{ motivo: string; total: number }>(`SELECT motivo, COUNT(*)::int AS total FROM "Chamado" GROUP BY 1 ORDER BY 2 DESC`);
-    const porMes = await q<{ mes: string; total: number }>(`SELECT to_char("abertoEm" AT TIME ZONE 'America/Sao_Paulo','YYYY-MM') AS mes, COUNT(*)::int AS total FROM "Chamado" GROUP BY 1 ORDER BY 1 DESC LIMIT 12`);
+    const porMes = await q<{ mes: string; total: number }>(`SELECT to_char("abertoEm" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo','YYYY-MM') AS mes, COUNT(*)::int AS total FROM "Chamado" GROUP BY 1 ORDER BY 1 DESC LIMIT 12`);
     return NextResponse.json({ ok: true, data: { ...geral, porMotivo, porMes } });
   } catch (e) {
     console.error("[Chamados indicadores]", e);

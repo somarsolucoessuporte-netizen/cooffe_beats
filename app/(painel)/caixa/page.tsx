@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { CaixaFechadoTela, chamar, useFecharCaixa, type CaixaFechado, type Pendencia } from "@/components/painel/FechamentoCaixa";
+import { diaSP } from "@/lib/fuso";
 
 type StatusCaixa = {
   aberto: boolean;
@@ -66,7 +67,7 @@ export default function CaixaPage() {
   const [fechResumo, setFechResumo] = useState<ResumoFechamento | null>(null);
   const [conferindo, setConferindo] = useState(false);
   const [confirmaForcar, setConfirmaForcar] = useState(false);
-  const [dataRelatorio, setDataRelatorio] = useState(new Date().toISOString().slice(0, 10));
+  const [dataRelatorio, setDataRelatorio] = useState(() => diaSP());
   const [caixaFechado, setCaixaFechado] = useState<CaixaFechado | null>(null);
 
   const carregarStatus = useCallback(async () => {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { fimValidade } from "@/lib/fuso";
 
 const Schema = z.object({
   codigo:      z.string().min(1),
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (!cupom)       return erroResposta("Cupom não encontrado", 404);
     if (!cupom.ativo) return erroResposta("Cupom inativo", 400);
 
-    if (cupom.validoAte && new Date() > cupom.validoAte) {
+    if (cupom.validoAte && new Date() > fimValidade(cupom.validoAte)) {
       return erroResposta("Cupom expirado", 400);
     }
 

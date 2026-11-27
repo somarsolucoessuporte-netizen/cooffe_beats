@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { playClick } from "@/lib/sounds";
+import { dataHoraSP, diaSP } from "@/lib/fuso";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 const HORARIOS   = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
@@ -18,7 +19,7 @@ function formatarWhatsApp(v: string): string {
 }
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return diaSP();
 }
 
 export default function AgendarPage() {
@@ -44,7 +45,7 @@ export default function AgendarPage() {
 
     setEnviando(true);
     try {
-      const dataHora = new Date(`${data}T${horario}:00`).toISOString();
+      const dataHora = dataHoraSP(`${data}T${horario}`).toISOString();
       const r = await fetch("/api/agendamentos", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },

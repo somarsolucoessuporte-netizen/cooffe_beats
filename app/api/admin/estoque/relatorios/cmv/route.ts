@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-auth";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { intervaloDias } from "@/lib/fuso";
 
 const EMPRESA_ID = process.env.NEXT_PUBLIC_EMPRESA_ID ?? "";
 
@@ -20,9 +21,9 @@ export async function GET(req: NextRequest) {
 
   if (!dataInicio || !dataFim) return erroResposta("dataInicio e dataFim são obrigatórios");
 
-  const inicio = new Date(dataInicio);
-  const fim    = new Date(dataFim);
-  fim.setHours(23, 59, 59, 999);
+  const dia = /^\d{4}-\d{2}-\d{2}/;
+  if (!dia.test(dataInicio) || !dia.test(dataFim) || dataInicio > dataFim) return erroResposta("Período inválido");
+  const { inicio, fim } = intervaloDias(dataInicio.slice(0, 10), dataFim.slice(0, 10));
 
   // Busca movimentações do período
   const movimentacoes = await prisma.movimentacaoEstoque.findMany({

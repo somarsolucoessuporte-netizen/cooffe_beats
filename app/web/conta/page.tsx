@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getWebSession } from "@/lib/web-auth";
 import { prisma } from "@/lib/prisma";
 import { formatarMoeda } from "@/lib/utils";
+import { FUSO } from "@/lib/fuso";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,7 @@ export default async function WebConta() {
             <div className="flex flex-col gap-3">
               {pedidos.map(function (pedido) {
                 var dataFmt = new Date(pedido.criadoEm).toLocaleString("pt-BR", {
+                  timeZone: FUSO,
                   day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
                 });
                 var itensResumo = pedido.itens

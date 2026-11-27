@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatarMoeda } from "@/lib/utils";
+import { diaSP } from "@/lib/fuso";
 
 interface ItemDesperdicio { nome: string; unidade: string; custo: number; quantidade: number }
 interface Movimentacao {
@@ -21,10 +22,8 @@ interface RelatorioCMV {
   movimentacoes:  Movimentacao[];
 }
 
-function hoje(): string { return new Date().toISOString().slice(0, 10); }
-function inicioMes(): string {
-  var d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10);
-}
+function hoje(): string { return diaSP(); }
+function inicioMes(): string { return diaSP().slice(0, 8) + "01"; }
 
 const TIPO_COR: Record<string, string> = {
   ENTRADA: "bg-green-100 text-green-700",

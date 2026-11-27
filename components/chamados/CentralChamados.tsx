@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { dataHora, duracao, ms, NOME_PRIORIDADE, NOME_STATUS } from "@/lib/chamados-tempo";
+import { diaSP, intervaloDias, somaDias } from "@/lib/fuso";
 
 const MOTIVOS = [
   "Pagamento no cartão/maquininha", "Pix", "Dividir conta", "Fechamento de caixa", "Impressão/comanda", "Totem",
@@ -66,7 +67,7 @@ export default function CentralChamados({ modo }: { modo: "cliente" | "somar" })
       const p = new URLSearchParams();
       if (filtro.status) p.set("status", filtro.status);
       if (filtro.motivo) p.set("motivo", filtro.motivo);
-      if (filtro.periodo) p.set("inicio", new Date(Date.now() - Number(filtro.periodo) * 86400000).toISOString());
+      if (filtro.periodo) p.set("inicio", intervaloDias(somaDias(diaSP(), 1 - Number(filtro.periodo))).inicio.toISOString());
       setLista(await chamar("/api/chamados?" + p.toString()));
       if (somar) setInd(await chamar("/api/somar/chamados/indicadores"));
       setErro("");
@@ -118,7 +119,7 @@ export default function CentralChamados({ modo }: { modo: "cliente" | "somar" })
         <select value={filtro.motivo} onChange={e => setFiltro(f => ({ ...f, motivo: e.target.value }))} className="border border-cb-marrom/20 rounded-xl px-3 py-2 text-sm bg-white">
           <option value="">Todos os motivos</option>{MOTIVOS.map(m => <option key={m}>{m}</option>)}</select>
         <select value={filtro.periodo} onChange={e => setFiltro(f => ({ ...f, periodo: e.target.value }))} className="border border-cb-marrom/20 rounded-xl px-3 py-2 text-sm bg-white">
-          <option value="">Todo o período</option><option value="1">Últimas 24 h</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option></select>
+          <option value="">Todo o período</option><option value="1">Hoje</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option></select>
       </div>
 
       {erro && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{erro} <button onClick={carregar} className="underline font-bold ml-2">Tentar novamente</button></p>}

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { ItemSessao } from "@/lib/checkout-sessao";
+import { fimValidade } from "@/lib/fuso";
 
 export type ItemCarrinhoEntrada = {
   produtoId:   string;
@@ -59,7 +60,7 @@ export async function calcularCarrinhoWeb(
   if (cupomId) {
     const cupom = await prisma.cupom.findUnique({ where: { id: cupomId } });
     const valido = cupom && cupom.ativo
-      && (!cupom.validoAte || new Date() <= cupom.validoAte)
+      && (!cupom.validoAte || new Date() <= fimValidade(cupom.validoAte))
       && (cupom.usoMaximo === null || cupom.usoAtual < cupom.usoMaximo)
       && (cupom.pedidoMinimo === null || subtotal >= cupom.pedidoMinimo);
     if (!valido) return { erro: "Cupom inválido ou expirado. Remova e tente novamente." };

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resposta, erroResposta } from "@/lib/api-response";
+import { diaSP, intervaloDias, somaDias } from "@/lib/fuso";
 
 // Chamado pelo N8N via cron — autenticado por API key simples no header
 export async function GET(req: Request) {
@@ -18,8 +19,8 @@ export async function GET(req: Request) {
   const dias = Number(searchParams.get("dias") ?? "3");
   if (isNaN(dias) || dias < 1) return erroResposta("dias deve ser >= 1");
 
-  const limite = new Date();
-  limite.setDate(limite.getDate() - dias);
+  // Sem visita há "dias" dias civis ou mais
+  const limite = intervaloDias(somaDias(diaSP(), 1 - dias)).inicio;
 
   const clientes = await prisma.cliente.findMany({
     where: {
