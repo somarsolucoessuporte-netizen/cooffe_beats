@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 type Perfil = "ADMIN" | "GERENTE" | "BARISTA" | "ATENDENTE";
 type Usuario = {
@@ -39,6 +40,7 @@ const inputClass =
   "w-full bg-white border border-zinc-200 rounded-xl px-4 py-2.5 text-zinc-900 text-sm focus:outline-none focus:border-[#3B2415] focus:ring-1 focus:ring-[#3B2415]/10";
 
 export default function AdminUsuarios() {
+  const confirmar = useConfirmar();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
@@ -127,7 +129,7 @@ export default function AdminUsuarios() {
   };
 
   const desativar = async (id: string) => {
-    if (!confirm("Desativar este usuário?")) return;
+    if (!(await confirmar("Desativar este usuário?"))) return;
     await fetch(`/api/admin/usuarios/${id}`, { method: "DELETE" });
     carregar();
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { CaixaFechadoTela, chamar, useFecharCaixa, type CaixaFechado, type Pendencia } from "@/components/painel/FechamentoCaixa";
 
 type StatusCaixa = {
   aberto: boolean;
@@ -42,31 +43,10 @@ type RelatorioDia = {
   extrato: ItemExtrato[];
 };
 
-type Pendencia = {
-  tipo: "DIVISAO" | "PAGAMENTO"; id: string; pedidoId: string; descricao: string;
-  valor: number; pago: number; criadoEm: string; temPagamento: boolean;
-};
-
 type ResumoFechamento = {
   totalPedidos: number; totalVendas: number; totalDinheiro: number; totalCredito: number; totalDebito: number;
   totalPixQr: number; totalPixCnpj: number; totalPixDividido: number; totalCartaoDividido: number;
 };
-
-/** fetch com limite de 15 s: nunca fica carregando para sempre. */
-async function chamar(url: string, init?: RequestInit) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 15000);
-  try {
-    const r = await fetch(url, { ...init, signal: ctrl.signal, cache: "no-store" });
-    const texto = await r.text();
-    let d: { ok?: boolean; error?: string; data?: unknown; pendencias?: Pendencia[] } = {};
-    try { d = JSON.parse(texto); } catch { d = { ok: false, error: `Resposta inválida do servidor (HTTP ${r.status})` }; }
-    return { status: r.status, ...d };
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") throw new Error("O servidor demorou mais de 15 segundos para responder.");
-    throw new Error("Sem conexão com o servidor.");
-  } finally { clearTimeout(t); }
-}
 
 const R$ = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -79,17 +59,15 @@ export default function CaixaPage() {
   const [relatorio, setRelatorio] = useState<RelatorioDia | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [abrindo, setAbrindo] = useState(false);
-  const [fechando, setFechando] = useState(false);
   const [valorAbertura, setValorAbertura] = useState("");
   const [mostrarAbrirModal, setMostrarAbrirModal] = useState(false);
   const [mostrarFecharModal, setMostrarFecharModal] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [fechResumo, setFechResumo] = useState<ResumoFechamento | null>(null);
-  const [pendencias, setPendencias] = useState<Pendencia[]>([]);
   const [conferindo, setConferindo] = useState(false);
-  const [erroFechar, setErroFechar] = useState("");
   const [confirmaForcar, setConfirmaForcar] = useState(false);
   const [dataRelatorio, setDataRelatorio] = useState(new Date().toISOString().slice(0, 10));
+  const [caixaFechado, setCaixaFechado] = useState<CaixaFechado | null>(null);
 
   const carregarStatus = useCallback(async () => {
     const r = await fetch("/api/caixa/status");
@@ -103,6 +81,15 @@ export default function CaixaPage() {
     const d = await r.json();
     if (d.ok) setRelatorio(d.data);
   }, [dataRelatorio]);
+
+  const { fechando, erro: erroFechar, setErro: setErroFechar, pendencias, setPendencias, limpar, fechar } = useFecharCaixa((resumo) => {
+    setMostrarFecharModal(false);
+    setCaixaFechado(resumo);
+    setStatus({ aberto: false, caixa: null, resumo: null });
+    // Atualização da tela em segundo plano: não segura o fechamento
+    carregarStatus().catch(() => {});
+    carregarRelatorio().catch(() => {});
+  });
 
   useEffect(() => { carregarStatus(); }, [carregarStatus]);
   useEffect(() => { carregarRelatorio(); }, [carregarRelatorio]);
@@ -142,32 +129,14 @@ export default function CaixaPage() {
   }
 
   function abrirFechar() {
-    setFechResumo(null); setPendencias([]); setErroFechar(""); setConfirmaForcar(false);
+    setFechResumo(null); limpar(); setConfirmaForcar(false);
     setMostrarFecharModal(true);
     void conferirFechamento();
   }
 
-  async function fecharCaixa(opcoes: { resolver?: boolean; forcar?: boolean } = {}) {
-    setFechando(true); setErroFechar("");
-    try {
-      const d = await chamar("/api/caixa/fechar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(opcoes),
-      });
-      if (d.ok) {
-        setMensagem("Caixa fechado com sucesso!");
-        setMostrarFecharModal(false);
-        await carregarStatus();
-        await carregarRelatorio();
-        setTimeout(() => setMensagem(""), 4000);
-      } else {
-        if (d.pendencias) setPendencias(d.pendencias);
-        setConfirmaForcar(false);
-        setErroFechar(d.error ?? "Erro ao fechar o caixa.");
-      }
-    } catch (e) { setErroFechar(e instanceof Error ? e.message : "Erro ao fechar o caixa."); }
-    finally { setFechando(false); }
+  function fecharCaixa(opcoes: { resolver?: boolean; forcar?: boolean } = {}) {
+    setConfirmaForcar(false);
+    void fechar({ caixaId: status?.caixa?.id, ...opcoes });
   }
 
   function imprimirRelatorio() {
@@ -532,14 +501,21 @@ ${relatorio.topProdutos.map(p => `<div class="linha"><span>${p.quantidade}x ${p.
               )}
               <button
                 onClick={() => setMostrarFecharModal(false)}
-                disabled={fechando}
-                className="py-2.5 rounded-xl border border-cb-marrom/20 text-cb-marrom text-sm font-medium disabled:opacity-50"
+                className="py-2.5 rounded-xl border border-cb-marrom/20 text-cb-marrom text-sm font-medium"
               >
                 Cancelar
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {caixaFechado && (
+        <CaixaFechadoTela
+          resumo={caixaFechado}
+          onAbrirNovo={() => { setCaixaFechado(null); setMostrarAbrirModal(true); }}
+          onVoltar={() => setCaixaFechado(null)}
+        />
       )}
     </div>
   );

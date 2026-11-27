@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import ImageCropModal from "./ImageCropModal";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 type Categoria = { id: string; nome: string; emoji: string };
 type Produto = {
@@ -42,6 +43,7 @@ const moeda = (v: string | number) =>
   );
 
 export default function AdminProdutos() {
+  const confirmar = useConfirmar();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -208,7 +210,7 @@ export default function AdminProdutos() {
   };
 
   const excluir = async (id: string) => {
-    if (!confirm("Desativar este produto?")) return;
+    if (!(await confirmar("Desativar este produto?"))) return;
     await fetch(`/api/admin/produtos/${id}`, { method: "DELETE" });
     carregarProdutos();
   };

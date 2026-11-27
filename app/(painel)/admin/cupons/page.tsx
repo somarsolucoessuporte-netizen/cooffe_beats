@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 interface Cupom {
   id:           string;
@@ -33,6 +34,7 @@ function formatarData(s: string | null) {
 }
 
 export default function CuponsPage() {
+  const confirmar = useConfirmar();
   const { data: session } = useSession();
   const perfil = (session?.user as { perfil?: string } | undefined)?.perfil ?? "";
 
@@ -103,7 +105,7 @@ export default function CuponsPage() {
   }
 
   async function excluir(id: string) {
-    if (!confirm("Excluir este cupom?")) return;
+    if (!(await confirmar("Excluir este cupom?"))) return;
     await fetch(`/api/admin/cupons/${id}`, { method: "DELETE" });
     carregar();
   }

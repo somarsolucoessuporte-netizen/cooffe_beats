@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 interface Produto { id: string; nome: string }
 interface Insumo  { id: string; nome: string; unidade: string }
@@ -10,6 +11,7 @@ interface FichaItem {
 }
 
 export default function FichaTecnicaPage() {
+  const confirmar = useConfirmar();
   const [produtos,     setProdutos]     = useState<Produto[]>([]);
   const [insumos,      setInsumos]      = useState<Insumo[]>([]);
   const [produtoId,    setProdutoId]    = useState("");
@@ -59,7 +61,7 @@ export default function FichaTecnicaPage() {
   }
 
   async function removerItem(insumoId: string) {
-    if (!confirm("Remover este insumo da ficha?")) return;
+    if (!(await confirmar("Remover este insumo da ficha?"))) return;
     var r = await fetch(`/api/admin/estoque/ficha-tecnica/${produtoId}?insumoId=${insumoId}`, { method: "DELETE" });
     var d = await r.json();
     if (d.ok) {

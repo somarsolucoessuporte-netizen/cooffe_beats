@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatarMoeda } from "@/lib/utils";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 type Mesa = {
   id: string;
@@ -50,6 +51,7 @@ const STATUS_LABEL: Record<string, string> = {
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://coffeebeats.somar.ia.br";
 
 export default function MesasPage() {
+  const confirmar = useConfirmar();
   const [mesas, setMesas]                     = useState<Mesa[]>([]);
   const [carregando, setCarregando]           = useState(true);
   const [numero, setNumero]                   = useState("");
@@ -150,7 +152,7 @@ export default function MesasPage() {
 
   async function fecharConta(mesa: Mesa) {
     const totalFmt = formatarMoeda(mesa.comandaTotal);
-    if (!confirm(`Fechar comanda da ${mesa.nome ?? "Mesa " + mesa.numero}?\nTotal: ${totalFmt}\n\nOs pedidos passarão para "Aguardando Pagamento".`)) return;
+    if (!(await confirmar(`Fechar comanda da ${mesa.nome ?? "Mesa " + mesa.numero}?\nTotal: ${totalFmt}\n\nOs pedidos passarão para "Aguardando Pagamento".`))) return;
     setFechandoId(mesa.id);
     const r = await fetch(`/api/admin/mesas/${mesa.id}/fechar`, { method: "POST" });
     const d = await r.json();
@@ -166,7 +168,7 @@ export default function MesasPage() {
   }
 
   async function excluir(mesa: Mesa) {
-    if (!confirm(`Excluir ${mesa.nome ?? "Mesa " + mesa.numero}?`)) return;
+    if (!(await confirmar(`Excluir ${mesa.nome ?? "Mesa " + mesa.numero}?`))) return;
     const r = await fetch(`/api/admin/mesas/${mesa.id}`, { method: "DELETE" });
     const d = await r.json();
     if (d.ok) await carregar();

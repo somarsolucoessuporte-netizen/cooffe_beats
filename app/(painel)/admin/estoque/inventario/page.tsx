@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 interface InventarioItem {
   id: string; insumoId: string;
@@ -17,6 +18,7 @@ interface Inventario {
 }
 
 export default function InventarioPage() {
+  const confirmar = useConfirmar();
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
   const [ativo,       setAtivo]       = useState<Inventario | null>(null);
   const [reais,       setReais]       = useState<Record<string, string>>({});
@@ -56,7 +58,7 @@ export default function InventarioPage() {
   useEffect(function () { carregar(); }, []);
 
   async function iniciarInventario() {
-    if (!confirm("Iniciar um novo inventário? Isso captura o estoque teórico atual de todos os insumos.")) return;
+    if (!(await confirmar("Iniciar um novo inventário? Isso captura o estoque teórico atual de todos os insumos."))) return;
     setIniciando(true);
     var r = await fetch("/api/admin/estoque/inventario", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -70,7 +72,7 @@ export default function InventarioPage() {
 
   async function finalizar() {
     if (!ativo) return;
-    if (!confirm("Finalizar inventário? O estoque será atualizado com os valores reais informados.")) return;
+    if (!(await confirmar("Finalizar inventário? O estoque será atualizado com os valores reais informados."))) return;
     setFinalizando(true);
     var itens = ativo.itens.map(function (i) {
       return { id: i.id, estoqueReal: parseFloat(reais[i.id] ?? "0") || 0 };

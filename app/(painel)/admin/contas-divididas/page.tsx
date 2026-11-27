@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DIVISAO_STORAGE } from "@/lib/dividir-conta/domain";
 import { formatarMoeda } from "@/lib/utils";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 type Conta={id:string;senha:string;total:number;pago:number;status:string};
 export default function ContasDivididas() {
+  const confirmar = useConfirmar();
   const router=useRouter();
   const [contas,setContas]=useState<Conta[]>([]);
   const [erro,setErro]=useState("");
@@ -21,7 +23,7 @@ export default function ContasDivididas() {
   async function executar(id?:string) {
     if(ocupado)return;setOcupado(true);setErro("");
     try {
-      if(id && !window.confirm("Retomar neste aparelho? A sessão anterior deixará de ter acesso à conta. Nenhuma nova cobrança será criada.")) return;
+      if(id && !(await confirmar("Retomar neste aparelho? A sessão anterior deixará de ter acesso à conta. Nenhuma nova cobrança será criada."))) return;
       // Check storage before rotating the capability.
       if(id) {sessionStorage.setItem("cb_storage_check","1");sessionStorage.removeItem("cb_storage_check");}
       const r=await fetch(id?`/api/admin/contas-divididas/${id}/retomar`:"/api/admin/contas-divididas/recuperar",{method:"POST"});

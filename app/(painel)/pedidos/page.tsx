@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { calcularTempoDecorrido, formatarMoeda } from "@/lib/utils";
+import { CaixaFechadoTela, imprimirFechamento, useFecharCaixa, type CaixaFechado } from "@/components/painel/FechamentoCaixa";
 
 interface ItemPedido {
   id: string;
@@ -54,6 +55,10 @@ type CaixaResumo = {
   totalPix: number;
   totalCartao: number;
   totalDinheiro: number;
+  totalCredito: number;
+  totalDebito: number;
+  totalPixQr: number;
+  totalPixCnpj: number;
   ticketMedio: number;
 };
 
@@ -72,7 +77,18 @@ export default function Pedidos() {
   const [valorAbertura, setValorAbertura] = useState("");
   const [obsFechamento, setObsFechamento] = useState("");
   const [abrindo,  setAbrindo]  = useState(false);
-  const [fechando, setFechando] = useState(false);
+  const [caixaFechado, setCaixaFechado] = useState<CaixaFechado | null>(null);
+  const [confirmaForcar, setConfirmaForcar] = useState(false);
+  const [avisoImpressao, setAvisoImpressao] = useState("");
+  const { fechando, erro: erroFechar, pendencias, limpar, fechar } = useFecharCaixa((resumo) => {
+    // Não chama verificarCaixa aqui: ele abriria o modal de abertura por cima do resumo
+    setModalFechamento(false);
+    setCaixaStatus("fechado");
+    setCaixaInfo(null);
+    setCaixaResumo(null);
+    setObsFechamento("");
+    setCaixaFechado(resumo);
+  });
 
   // --- Pedidos ---
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -149,62 +165,34 @@ export default function Pedidos() {
     finally { setAbrindo(false); }
   };
 
-  const fecharCaixa = async () => {
-    setFechando(true);
+  const abrirFechamento = async () => {
+    limpar();
+    setConfirmaForcar(false);
+    setAvisoImpressao("");
+    setModalFechamento(true);
+    // Atualiza os totais mostrados no modal (a tela pode estar aberta há horas)
     try {
-      const res  = await fetch("/api/caixa/fechar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ observacao: obsFechamento }),
-      });
+      const res  = await fetch("/api/caixa/status", { cache: "no-store" });
       const data = await res.json();
-      if (data.ok) {
-        setCaixaStatus("fechado");
-        setCaixaInfo(null);
-        setCaixaResumo(null);
-        setModalFechamento(false);
-        setObsFechamento("");
-        alert("Caixa fechado! Bom descanso ☕");
+      if (data.ok && data.data.aberto) {
+        setCaixaInfo(data.data.caixa);
+        setCaixaResumo(data.data.resumo);
       }
-    } catch { /* silencioso */ }
-    finally { setFechando(false); }
+    } catch { /* mantém os totais já carregados */ }
   };
 
-  const imprimirRelatorioDia = async () => {
-    const hoje = new Date().toISOString().slice(0, 10);
-    try {
-      const res = await fetch("/api/relatorios/dia?data=" + hoje);
-      const d   = await res.json();
-      if (!d.ok) return;
-      const rel = d.data;
-      const html = `<!DOCTYPE html><html><head>
-<style>@page{size:80mm auto;margin:0}body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;margin:0}h1{text-align:center;font-size:14px;margin:4px 0}.linha{display:flex;justify-content:space-between;margin:2px 0}.sep{border-top:1px dashed #000;margin:6px 0}.bold{font-weight:bold}</style>
-</head><body>
-<h1>RELATÓRIO DO DIA</h1><h1>${rel.data}</h1>
-<div class="sep"></div>
-<div class="linha"><span>Pedidos:</span><span>${rel.totalPedidos}</span></div>
-<div class="linha"><span>Cancelados:</span><span>${rel.cancelados}</span></div>
-<div class="sep"></div>
-<div class="linha bold"><span>TOTAL VENDAS:</span><span>${R$(rel.totalVendas)}</span></div>
-<div class="linha"><span>PIX:</span><span>${R$(rel.totalPix)}</span></div>
-<div class="linha"><span>Cartão:</span><span>${R$(rel.totalCartao)}</span></div>
-<div class="linha"><span>Dinheiro:</span><span>${R$(rel.totalDinheiro)}</span></div>
-<div class="sep"></div>
-<div style="text-align:center;font-size:10px">${new Date().toLocaleString("pt-BR")}</div>
-</body></html>`;
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
-      document.body.appendChild(iframe);
-      if (iframe.contentWindow) {
-        iframe.contentWindow.document.open();
-        iframe.contentWindow.document.write(html);
-        iframe.contentWindow.document.close();
-        setTimeout(function() {
-          try { if (iframe.contentWindow) iframe.contentWindow.print(); } catch(e) {}
-          setTimeout(function() { try { document.body.removeChild(iframe); } catch(e) {} }, 1000);
-        }, 500);
-      }
-    } catch { /* silencioso */ }
+  const fecharCaixa = (opcoes: { resolver?: boolean; forcar?: boolean } = {}) => {
+    setConfirmaForcar(false);
+    void fechar({ caixaId: caixaInfo?.id, observacao: obsFechamento, ...opcoes });
+  };
+
+  const imprimirParcial = () => {
+    if (!caixaInfo || !caixaResumo) return;
+    setAvisoImpressao("");
+    imprimirFechamento(
+      { ...caixaResumo, caixaId: caixaInfo.id, abertoEm: caixaInfo.abridoEm, fechadoEm: null, valorAbertura: caixaInfo.valorAbertura, jaFechado: false },
+      () => setAvisoImpressao("Não foi possível imprimir."),
+    );
   };
 
   const pedidosDaColuna = (status: string) => pedidos.filter((p) => p.status === status);
@@ -243,7 +231,7 @@ export default function Pedidos() {
             </div>
           </div>
           <button
-            onClick={() => setModalFechamento(true)}
+            onClick={abrirFechamento}
             className="text-sm font-semibold text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl transition-all border border-red-200"
           >
             🔒 Fechar Caixa
@@ -458,22 +446,61 @@ export default function Pedidos() {
               rows={2}
             />
 
-            <div className="flex gap-3 mb-3">
+            {pendencias.length > 0 && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 mb-4 text-sm text-[#3B2415] space-y-1">
+                {pendencias.map((p) => (
+                  <div key={p.tipo + p.id} className="flex justify-between gap-3">
+                    <span>{p.descricao}</span>
+                    <span className="whitespace-nowrap">{R$(p.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {erroFechar && (
+              <p role="alert" className="text-sm font-medium px-4 py-3 mb-4 rounded-2xl bg-red-50 text-red-600">{erroFechar}</p>
+            )}
+
+            {avisoImpressao && (
+              <p role="alert" className="text-sm font-medium px-4 py-3 mb-4 rounded-2xl bg-amber-50 text-amber-700">{avisoImpressao}</p>
+            )}
+
+            <div className="flex flex-col gap-3 mb-3">
               <button
-                onClick={imprimirRelatorioDia}
-                className="flex-1 border-2 border-[#3B2415] text-[#3B2415] py-3 rounded-2xl
-                           font-bold hover:bg-[#F6F0E5] transition-all"
+                onClick={imprimirParcial}
+                disabled={!caixaResumo}
+                className="border-2 border-[#3B2415] text-[#3B2415] py-3 rounded-2xl
+                           font-bold hover:bg-[#F6F0E5] transition-all disabled:opacity-60"
               >
                 🖨️ Imprimir Relatório
               </button>
-              <button
-                onClick={fecharCaixa}
-                disabled={fechando}
-                className="flex-1 bg-red-600 text-white py-3 rounded-2xl font-bold
-                           hover:bg-red-700 transition-all disabled:opacity-60"
-              >
-                {fechando ? "Fechando..." : "✅ Confirmar Fechamento"}
-              </button>
+              {pendencias.length > 0 ? (
+                <>
+                  <button
+                    onClick={() => fecharCaixa({ resolver: true })}
+                    disabled={fechando}
+                    className="bg-amber-500 text-white py-3 rounded-2xl font-bold hover:bg-amber-600 disabled:opacity-60"
+                  >
+                    {fechando ? "Fechando..." : "Resolver pendências e fechar"}
+                  </button>
+                  <button
+                    onClick={() => (confirmaForcar ? fecharCaixa({ forcar: true }) : setConfirmaForcar(true))}
+                    disabled={fechando}
+                    className="bg-red-600 text-white py-3 rounded-2xl font-bold hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {confirmaForcar ? "Confirmar: fechar com pendências" : "Fechar mesmo assim"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => fecharCaixa()}
+                  disabled={fechando}
+                  className="bg-red-600 text-white py-3 rounded-2xl font-bold
+                             hover:bg-red-700 transition-all disabled:opacity-60"
+                >
+                  {fechando ? "Fechando..." : erroFechar ? "Tentar novamente" : "✅ Confirmar Fechamento"}
+                </button>
+              )}
             </div>
 
             <button
@@ -484,6 +511,14 @@ export default function Pedidos() {
             </button>
           </div>
         </div>
+      )}
+
+      {caixaFechado && (
+        <CaixaFechadoTela
+          resumo={caixaFechado}
+          onAbrirNovo={() => { setCaixaFechado(null); setModalAbertura(true); }}
+          onVoltar={() => setCaixaFechado(null)}
+        />
       )}
     </div>
   );

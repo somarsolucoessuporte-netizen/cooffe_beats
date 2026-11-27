@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirmar } from "@/components/painel/Confirmacao";
 
 interface Insumo {
   id: string; nome: string; unidade: string;
@@ -12,6 +13,7 @@ interface Insumo {
 const VAZIO: Partial<Insumo> = { nome: "", unidade: "", estoqueAtual: 0, estoqueMinimo: 0, percentualPerda: 3, custo: 0 };
 
 export default function InsumosPage() {
+  const confirmar = useConfirmar();
   const [insumos,   setInsumos]   = useState<Insumo[]>([]);
   const [form,      setForm]      = useState<Partial<Insumo>>(VAZIO);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function InsumosPage() {
   }
 
   async function deletar(id: string) {
-    if (!confirm("Desativar este insumo?")) return;
+    if (!(await confirmar("Desativar este insumo?"))) return;
     var r = await fetch(`/api/admin/estoque/insumos/${id}`, { method: "DELETE" });
     var d = await r.json();
     if (d.ok) { feedback("Insumo desativado", true); carregar(); }

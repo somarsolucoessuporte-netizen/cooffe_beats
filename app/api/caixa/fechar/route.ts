@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { liberarExpiradas, listarPendencias, resolverPendencias, resumoCaixa } from "@/lib/caixa-fechamento";
+import type { Caixa } from "@prisma/client";
 
 export const maxDuration = 30;
 
@@ -10,22 +11,43 @@ function falha(error: string, status: number, extra: Record<string, unknown> = {
   return NextResponse.json({ ok: false, error, ...extra }, { status });
 }
 
-async function contexto() {
+async function empresaDaSessao() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return { erro: falha("Não autenticado", 401) };
   const empresaId = (session.user as { empresaId?: string }).empresaId;
   if (!empresaId) return { erro: falha("Sessão inválida", 401) };
-  const caixa = await prisma.caixa.findFirst({ where: { empresaId, status: "ABERTO" }, orderBy: { abridoEm: "desc" } });
-  if (!caixa) return { erro: falha("Nenhum caixa aberto encontrado", 404) };
-  return { empresaId, caixa };
+  return { empresaId };
+}
+
+const caixaAberto = (empresaId: string) =>
+  prisma.caixa.findFirst({ where: { empresaId, status: "ABERTO" }, orderBy: { abridoEm: "desc" } });
+
+/** Resposta de sucesso: a mesma para o fechamento recém-feito e para um caixa que já estava fechado. */
+async function sucesso(empresaId: string, caixa: Caixa, jaFechado: boolean, pendenciasRegistradas = 0) {
+  const { divisao: _divisao, ...totais } = await resumoCaixa(empresaId, caixa.id);
+  void _divisao;
+  return NextResponse.json({
+    ok: true,
+    data: {
+      caixaId: caixa.id,
+      ...totais,
+      abertoEm: caixa.abridoEm,
+      fechadoEm: caixa.fechadoEm,
+      valorAbertura: Number(caixa.valorAbertura),
+      jaFechado,
+      pendenciasRegistradas,
+    },
+  });
 }
 
 /** Prévia do fechamento: libera divisões abandonadas e devolve totais e pendências ativas. */
 export async function GET() {
   try {
-    const ctx = await contexto();
+    const ctx = await empresaDaSessao();
     if (ctx.erro) return ctx.erro;
-    const { empresaId, caixa } = ctx;
+    const { empresaId } = ctx;
+    const caixa = await caixaAberto(empresaId);
+    if (!caixa) return falha("Nenhum caixa aberto encontrado", 404);
     const liberadas = await liberarExpiradas(caixa.id);
     const [resumo, pendencias] = await Promise.all([resumoCaixa(empresaId, caixa.id), listarPendencias(caixa.id)]);
     return NextResponse.json({ ok: true, data: { resumo, pendencias, liberadas } });
@@ -36,16 +58,25 @@ export async function GET() {
 }
 
 /**
- * Body: { observacao?, valorFechamento?, resolver?: boolean, forcar?: boolean }
+ * Body: { caixaId?, observacao?, valorFechamento?, resolver?: boolean, forcar?: boolean }
+ * - caixaId: o caixa que a tela está fechando. Evita que uma aba antiga feche um caixa aberto depois.
  * - resolver: cancela as pendências ativas (no Mercado Pago em segundo plano) antes de fechar.
  * - forcar: fecha mesmo com pendências, registrando-as na observação do caixa.
+ * Idempotente: se o caixa já estiver fechado, responde sucesso com o resumo existente.
  */
 export async function POST(req: Request) {
   try {
-    const ctx = await contexto();
+    const ctx = await empresaDaSessao();
     if (ctx.erro) return ctx.erro;
-    const { empresaId, caixa } = ctx;
-    const body = await req.json().catch(() => ({})) as { observacao?: string; valorFechamento?: number; resolver?: boolean; forcar?: boolean };
+    const { empresaId } = ctx;
+    const body = await req.json().catch(() => ({})) as { caixaId?: string; observacao?: string; valorFechamento?: number; resolver?: boolean; forcar?: boolean };
+
+    const caixa = typeof body.caixaId === "string" && body.caixaId
+      ? await prisma.caixa.findFirst({ where: { id: body.caixaId, empresaId } })
+      : await caixaAberto(empresaId) ??
+        await prisma.caixa.findFirst({ where: { empresaId, status: "FECHADO" }, orderBy: { fechadoEm: "desc" } });
+    if (!caixa) return falha("Caixa não encontrado", 404);
+    if (caixa.status !== "ABERTO") return await sucesso(empresaId, caixa, true);
 
     await liberarExpiradas(caixa.id);
     if (body.resolver) await resolverPendencias(empresaId, caixa.id);
@@ -59,9 +90,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const resumo = await resumoCaixa(empresaId, caixa.id);
-    const { divisao: _divisao, ...totais } = resumo;
-    void _divisao;
+    const { totalVendas } = await resumoCaixa(empresaId, caixa.id);
 
     const notaPendencias = pendencias.length
       ? `Fechado com pendências: ${pendencias.map(p => `${p.descricao} R$ ${p.valor.toFixed(2)} (pedido ${p.pedidoId})`).join("; ")}`
@@ -72,17 +101,14 @@ export async function POST(req: Request) {
       where: { id: caixa.id, status: "ABERTO" },
       data: {
         status: "FECHADO",
-        valorFechamento: body.valorFechamento != null ? Number(body.valorFechamento) : resumo.totalVendas,
+        valorFechamento: body.valorFechamento != null ? Number(body.valorFechamento) : totalVendas,
         observacao,
         fechadoEm: new Date(),
       },
     });
-    if (fechado.count === 0) return falha("Este caixa já foi fechado", 409);
-
-    return NextResponse.json({
-      ok: true,
-      data: { caixaId: caixa.id, ...totais, pendenciasRegistradas: pendencias.length },
-    });
+    const atual = await prisma.caixa.findUniqueOrThrow({ where: { id: caixa.id } });
+    // count 0 = outra requisição fechou primeiro: mesmo resultado para quem clicou
+    return await sucesso(empresaId, atual, fechado.count === 0, fechado.count === 0 ? 0 : pendencias.length);
   } catch (e) {
     console.error("[Caixa/fechar POST]", e);
     return falha("Erro ao fechar o caixa: " + (e instanceof Error ? e.message : "erro desconhecido"), 500);
