@@ -1,10 +1,20 @@
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase";
 import { db, habilitada, estruturaPronta } from "./database";
 import { criarServico } from "./service";
+import { MINIMO_CARTAO_PADRAO } from "./domain";
 import { mercadoPagoDivisao } from "./mercadopago";
 
-export const divisao = criarServico(db, mercadoPagoDivisao, habilitada, () => process.env.MP_DEVICE_ID);
+export const divisao = criarServico(db, mercadoPagoDivisao, habilitada, () => process.env.MP_DEVICE_ID, {
+  // Roda depois da resposta; a função continua viva até terminar.
+  segundoPlano: fn => { try { after(fn); } catch { void fn(); } },
+  // Mínimo por parcela no cartão, em centavos.
+  minimoCartao: () => {
+    const n = Number(process.env.DIVIDIR_CONTA_MIN_CARTAO_CENTAVOS);
+    return Number.isInteger(n) && n > 0 ? n : MINIMO_CARTAO_PADRAO;
+  },
+});
 
 // Retried by status queries, webhooks and the authenticated recovery endpoint.
 // Financial settlement/stock are already committed; broadcasting is safe to repeat.

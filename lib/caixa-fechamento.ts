@@ -5,6 +5,7 @@ import { lock } from "@/lib/dividir-conta/service";
 import { recebimentosDivididos } from "@/lib/dividir-conta/relatorios";
 import { cancelarPagamentoPoint, cancelarOrderMp } from "@/lib/mercadopago";
 import { somarPorMetodo } from "@/lib/metodos-pagamento";
+import { reconciliarPagamentoMp, type PayloadMp } from "@/lib/mp-pagamento";
 
 /** Pendência sem nenhum pagamento recebido e parada há mais que isto é considerada abandonada. */
 const EXPIRA_MIN = 120;
@@ -159,8 +160,13 @@ export async function resolverPendencias(empresaId: string, caixaId: string) {
   }
   const pagamentos = await prisma.pagamento.findMany({
     where: { status: "PENDENTE", pedido: { caixaId, status: "AGUARDANDO_PAGAMENTO" } },
-    select: { pedidoId: true, payload: true, pixOrderId: true },
+    select: { id: true, pedidoId: true, referencia: true, payload: true, pixOrderId: true },
   });
+  // Confere no Mercado Pago antes de cancelar: o que já foi pago sai de AGUARDANDO_PAGAMENTO e é preservado.
+  await Promise.race([
+    Promise.allSettled(pagamentos.filter(p => (p.payload as PayloadMp | null)?.provider === "mercadopago").map(p => reconciliarPagamentoMp(p))),
+    new Promise(r => setTimeout(r, 6000)),
+  ]);
   for (const p of pagamentos) {
     try {
       const cancelado = await prisma.pedido.updateMany({ where: { id: p.pedidoId, status: "AGUARDANDO_PAGAMENTO" }, data: { status: "CANCELADO" } });
@@ -176,4 +182,14 @@ export async function resolverPendencias(empresaId: string, caixaId: string) {
       console.warn("[Fechamento] não cancelou pagamento", p.pedidoId, e instanceof Error ? e.message : e);
     }
   }
+}
+
+/** Pedidos do totem abandonados: sem mesa, sem pagamento registrado, sem divisão e sem valor recebido. */
+export async function cancelarPedidosSemPagamento(empresaId: string, caixaId: string) {
+  const comDivisao = (await contasPendentes(caixaId)).map(c => c.pedidoId);
+  const r = await prisma.pedido.updateMany({
+    where: { empresaId, caixaId, status: "AGUARDANDO_PAGAMENTO", origem: "TOTEM", mesaId: null, pago: false, pagamento: { is: null }, id: { notIn: comDivisao } },
+    data: { status: "CANCELADO" },
+  });
+  return r.count;
 }

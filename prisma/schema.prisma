@@ -478,6 +478,8 @@ model TentativaParcela {
   criadoEm DateTime @default(now()) @db.Timestamp(3)
   consultadoEm DateTime? @db.Timestamp(3)
   aprovadoEm DateTime? @db.Timestamp(3)
+  mpStatus Int?
+  mpErro String?
   conta ContaDividida @relation(fields: [contaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   parcela ParcelaConta @relation(fields: [parcelaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   eventos EventoParcela[]
@@ -496,6 +498,7 @@ model EventoParcela {
 model DivisaoOperacaoLegada {
   id String @id
   criadoEm DateTime @default(now()) @db.Timestamp(3)
+  encerradoEm DateTime? @db.Timestamp(3)
 }
 
 // ══════════════════════════════════════════════════════

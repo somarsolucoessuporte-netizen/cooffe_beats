@@ -14,7 +14,7 @@ export async function GET() {
       LEFT JOIN "TentativaParcela" t ON t."contaId"=c.id
       WHERE c."empresaId"=$1 GROUP BY c.id,p.senha ORDER BY c."criadoEm" DESC LIMIT 100`, [empresaId]);
     // These leases are deliberately global while the MVP uses a shared terminal gate.
-    const [legadas] = await db.query<{ total: number }>(`SELECT COUNT(*)::integer AS total FROM "DivisaoOperacaoLegada"`);
+    const [legadas] = await db.query<{ total: number }>(`SELECT COUNT(*)::integer AS total FROM "DivisaoOperacaoLegada" WHERE "encerradoEm" IS NULL`);
     return respostaDivisao({ contas, operacoesLegadasPendentes: legadas.total });
   });
 }

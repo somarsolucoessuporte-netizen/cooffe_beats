@@ -8,11 +8,14 @@ import { cobrarComReconsulta, encerrarAtendimentoDivisao, RequestError } from "@
 import { gerarPixEstatico, pixEstaticoVisivel } from "@/lib/pix-estatico";
 import { formatarMoeda } from "@/lib/utils";
 
-type Tentativa = { id: string; status: string; meio?: string; criadoEm?: string | null };
+type Tentativa = { id: string; status: string; meio?: string; criadoEm?: string | null; temCobranca?: boolean; motivo?: string | null };
 type Resumo = {
   id: string; pedidoId: string; senha: string; total: number; pago: number; saldo: number; reservado: number; status: string; habilitada: boolean;
   bloqueioCobranca?: string | null;
   maquininha?: { parcelaId: string; ordem: number } | null;
+  minimoCartao?: number;
+  aviso?: string;
+  naoCancelados?: number;
   pix?: { tentativaId: string; parcelaId: string; qrData: string; valor: number }[];
   parcelas: { id: string; ordem: number; valor: number; status: string; tentativas: Tentativa[] }[];
 };
@@ -55,6 +58,7 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
   const [finalizando, setFinalizando] = useState(false);
   const [painel, setPainel] = useState<PixPainel | null>(null);
   const [copiado, setCopiado] = useState("");
+  const [avisoSaida, setAvisoSaida] = useState("");
   const [, setTick] = useState(0);
   const sessao = useRef<Sessao | null>(null);
   const saiu = useRef(false);
@@ -175,7 +179,7 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
     try {
       const parte = conta.parcelas.find(p => p.id === parcelaId)!;
       const ultima = parte.tentativas[parte.tentativas.length - 1];
-      const chave = chaveDaParcela(parcelaId, ultima?.status === "RECUSADO" ? ultima.id : null, "");
+      const chave = chaveDaParcela(parcelaId, ultima && ["RECUSADO", "DESCONHECIDO"].includes(ultima.status) ? ultima.id : null, "");
       const resultado = await cobrarComReconsulta(
         () => request(`/api/pagamentos/dividir/${conta.id}/cobrar`, { parcelaId, chave }),
         () => request(`/api/pagamentos/dividir/${conta.id}`),
@@ -233,7 +237,7 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
       const cancelamento = request(`/api/pagamentos/dividir/${conta.id}/cancelar-pagamento`, {}).catch(() => null);
       const d = await Promise.race([cancelamento, new Promise<null>(ok => setTimeout(() => ok(null), 4000))]);
       if (saiu.current) return;
-      if (d) setConta(d);
+      if (d) { setConta(d); if (d.aviso) setErro(d.aviso); }
     } finally { cobrando.current = false; setOcupado(false); }
     await abrirPix(parcelaId);
   }
@@ -251,37 +255,51 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
       const data = await request(`/api/pagamentos/dividir/${conta.id}/cancelar-pagamento`, {});
       if (saiu.current) return;
       setConta(data); setPainel(null);
-      if ((data as unknown as { naoCancelados?: number }).naoCancelados) setErro("Não foi possível cancelar agora no Mercado Pago. Tente de novo em instantes ou chame o atendente.");
+      if (data.naoCancelados) setErro("Não foi possível cancelar agora. O pagamento continua em andamento; tente de novo ou chame o atendente.");
+      else if (data.aviso) setErro(data.aviso);
     } catch (e) { setErro(e instanceof Error ? e.message : "Não foi possível cancelar o pagamento"); }
     finally { cobrando.current = false; setOcupado(false); }
   }
 
-  // "Cancelar divisão e voltar": sempre funciona. Espera o servidor no máximo ~3 s; se não responder,
-  // solta este aparelho da conta (sem apagar nada) e devolve o cliente à escolha de pagamento com o carrinho intacto.
+  // "Cancelar divisão e voltar": só sai depois que o servidor confirma o que foi feito.
+  // Sem confirmação, fica na tela com o erro ("Encerrar atendimento" continua disponível).
   async function sair() {
-    saiu.current = true;
-    const s = sessao.current;
-    const destravar = () => { try { encerrarAtendimentoDivisao(sessionStorage, localStorage); } catch { try { sessionStorage.removeItem(DIVISAO_STORAGE); } catch { /* sem storage */ } } sessao.current = null; };
-    if (!s?.id) { try { sessionStorage.removeItem(DIVISAO_STORAGE); } catch { /* sem storage */ } sessao.current = null; onVoltar(); return; }
+    if (saiu.current) return;
+    saiu.current = true; setOcupado(true); setErro("");
+    const esquecer = () => { try { sessionStorage.removeItem(DIVISAO_STORAGE); } catch { /* sem storage */ } sessao.current = null; };
+    const ficar = (mensagem: string) => { saiu.current = false; setOcupado(false); setErro(mensagem); };
     try {
-      const r = await Promise.race([
-        fetch(`/api/pagamentos/dividir/${s.id}/cancelar`, { method: "POST", headers: { Authorization: `Bearer ${s.token}` }, cache: "no-store" }).then(x => x.json()),
-        new Promise<null>(ok => setTimeout(() => ok(null), 3000)),
-      ]);
-      if (r && r.ok && r.data?.cancelada) { try { sessionStorage.removeItem(DIVISAO_STORAGE); } catch { /* sem storage */ } sessao.current = null; onVoltar(); return; }
-      if (r && r.ok && r.data && r.data.pago > 0) { onVoltar({ pago: r.data.pago, saldo: r.data.saldo }); return; }
-    } catch { /* segue para destravar */ }
-    destravar(); onVoltar();
+      let s = sessao.current;
+      if (!s) { onVoltar(); return; }
+      if (!s.id) {
+        // A resposta da criação pode ter se perdido: recupera a conta (mesma chave) antes de cancelar.
+        try { s = { ...s, id: (await request("/api/pagamentos/dividir", s.request)).id }; sessao.current = s; }
+        catch (e) {
+          if (e instanceof RequestError && [400, 403].includes(e.status)) { esquecer(); onVoltar(); return; }
+          throw e;
+        }
+      }
+      const r = await request(`/api/pagamentos/dividir/${s.id}/cancelar`, {}) as unknown as { cancelada: boolean; pago: number; saldo: number; pendentes: number; aviso?: string };
+      if (r.cancelada) { esquecer(); if (r.aviso) setAvisoSaida(r.aviso); else onVoltar(); return; }
+      if (r.pago > 0 && r.pendentes === 0) { onVoltar({ pago: r.pago, saldo: r.saldo }); return; }
+      ficar("A divisão NÃO foi cancelada: há um pagamento que não pôde ser encerrado ou a conta está em revisão. Tente de novo ou chame o atendente.");
+    } catch (e) { ficar(`A divisão NÃO foi cancelada. ${e instanceof Error ? e.message : "Tente novamente."}`); }
   }
 
   const ativaNaConta = conta?.parcelas.some(p => p.tentativas.some(t => ATIVOS.includes(t.status))) ?? false;
   const dinamicoPronto = (parcelaId: string) => conta?.pix?.find(x => x.parcelaId === parcelaId);
   const estaticoVisivel = painel ? pixEstaticoVisivel({ ativo: true, estado: painel.dinamico, decorridoMs: painel.dinamico === "gerando" ? Date.now() - painel.desde : 0 }) : false;
 
+  if (avisoSaida) return <section className="flex-1 p-5 flex flex-col items-center justify-center gap-5" aria-label="Divisão cancelada">
+    <h1 className="text-3xl font-extrabold text-cb-marrom">Divisão cancelada</h1>
+    <p role="alert" className="max-w-xl text-center bg-amber-50 border border-amber-300 rounded-xl p-4">{avisoSaida}</p>
+    <button onClick={() => onVoltar()} className="bg-cb-marrom text-white font-bold rounded-xl px-8 py-4 touch-manipulation">Voltar ao pagamento</button>
+  </section>;
+
   return <section className="flex-1 overflow-y-auto p-5 flex flex-col items-center gap-5" aria-label="Dividir conta">
     {/* Sempre visíveis e funcionando, em qualquer estado */}
     <div className="sticky top-0 z-10 w-full max-w-xl bg-cb-bege py-2 flex flex-col gap-2">
-      <button onClick={sair} className="w-full border-2 border-cb-marrom rounded-xl px-5 py-4 font-bold bg-white touch-manipulation">← Voltar ao pagamento</button>
+      <button onClick={sair} disabled={ocupado} className="w-full disabled:opacity-50 border-2 border-cb-marrom rounded-xl px-5 py-4 font-bold bg-white touch-manipulation">← Voltar ao pagamento</button>
       <button onClick={() => { saiu.current = true; try { onAtendimento(); } catch { saiu.current = false; setErro("Não foi possível encerrar o atendimento neste aparelho. Solicite ajuda ao atendente."); } }} className="w-full text-cb-marrom/70 underline text-sm py-1 touch-manipulation">Encerrar atendimento e iniciar novo pedido</button>
     </div>
     <h1 className="text-3xl font-extrabold text-cb-marrom">Dividir conta</h1>
@@ -343,28 +361,37 @@ export default function DividirConta({ itens, total, onVoltar, onAtendimento, on
           const emUsoPor = conta.maquininha && conta.maquininha.parcelaId !== p.id ? conta.maquininha.ordem : null;
           const desabilitado = ocupado || !conta.habilitada || conta.status !== "ABERTA" || emUsoPor !== null;
           const recusada = ultima?.status === "RECUSADO" && p.status === "ABERTA";
-          const restante = pointAtiva?.criadoEm ? VALIDADE_POINT_MS - (Date.now() - new Date(pointAtiva.criadoEm).getTime()) : null;
+          // Sem cobrança confirmada na maquininha: as opções ficam disponíveis na hora.
+          const incerta = pointAtiva?.status === "DESCONHECIDO" && !pointAtiva.temCobranca;
+          const naMaquininha = pointAtiva?.status === "PENDENTE" && !!pointAtiva.temCobranca;
+          const minimo = conta.minimoCartao ?? 100;
+          const abaixoMinimo = p.valor < minimo;
+          const restante = naMaquininha && pointAtiva?.criadoEm ? VALIDADE_POINT_MS - (Date.now() - new Date(pointAtiva.criadoEm).getTime()) : null;
           return <li key={p.id} className="bg-white rounded-xl p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <div><p className="font-bold">Pessoa {p.ordem} · {moeda(p.valor)}</p><p className="text-sm" aria-live="polite">{pointAtiva ? "Aguardando" : estado}</p>{ultima?.status === "DESCONHECIDO" && !pointAtiva && <p className="text-sm">Aguardando confirmação. Não repita o pagamento.</p>}</div>
-              {p.status === "ABERTA" && !parcelaAtiva && <div className="flex flex-col gap-2">
-                <button className="bg-cb-marrom text-white rounded-xl px-5 py-3 disabled:opacity-40 touch-manipulation" disabled={desabilitado} onClick={() => pagar(p.id)}>{emUsoPor !== null ? `Maquininha em uso pela Pessoa ${emUsoPor}` : recusada ? "Tentar de novo (cartão)" : "Cartão"}</button>
-                <button className="border-2 border-cb-marrom rounded-xl px-5 py-3 font-bold disabled:opacity-40 touch-manipulation" disabled={ocupado || !conta.habilitada || conta.status !== "ABERTA"} onClick={() => abrirPix(p.id)}>{recusada ? "Trocar para Pix" : "Pix"}</button>
+              <div><p className="font-bold">Pessoa {p.ordem} · {moeda(p.valor)}</p><p className="text-sm" aria-live="polite">{incerta ? "Não confirmado" : estado}</p></div>
+              {p.status === "ABERTA" && (!parcelaAtiva || incerta) && <div className="flex flex-col gap-2">
+                <button className="bg-cb-marrom text-white rounded-xl px-5 py-3 disabled:opacity-40 touch-manipulation" disabled={desabilitado || abaixoMinimo} onClick={() => pagar(p.id)}>{abaixoMinimo ? `Mínimo no cartão: ${moeda(minimo)} — use Pix` : emUsoPor !== null ? `Maquininha em uso pela Pessoa ${emUsoPor}` : recusada || incerta ? "Tentar de novo (cartão)" : "Cartão"}</button>
+                <button className="border-2 border-cb-marrom rounded-xl px-5 py-3 font-bold disabled:opacity-40 touch-manipulation" disabled={ocupado || !conta.habilitada || conta.status !== "ABERTA"} onClick={() => abrirPix(p.id)}>{recusada || incerta ? "Trocar para Pix" : "Pix"}</button>
               </div>}
             </div>
-            {recusada && <p className="text-sm text-red-700 bg-red-50 rounded-lg p-2">Cartão não aprovado, cancelado ou expirado. Tente de novo ou troque para Pix.</p>}
-            {pointAtiva && <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col gap-2" role="status">
-              <p className="font-extrabold">Passe o cartão na maquininha — {moeda(p.valor)}</p>
-              <p className="text-sm">Aguardando{restante !== null ? ` · expira em ${restante > 0 ? mmss(restante) : "instantes"}` : ""}</p>
+            {recusada && <p className="text-sm text-red-700 bg-red-50 rounded-lg p-2">Cartão não aprovado, cancelado ou expirado. Tente de novo ou troque para Pix.{ultima?.meio === "POINT" && ultima.motivo ? ` Motivo: ${ultima.motivo}` : ""}</p>}
+            {incerta && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg p-2">Não foi possível confirmar com a maquininha. Confira se há cobrança na tela dela antes de tentar de novo ou trocar para Pix.</p>}
+            {pointAtiva && !incerta && <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col gap-2" role="status">
+              {naMaquininha ? <>
+                <p className="font-extrabold">Passe o cartão na maquininha — {moeda(p.valor)}</p>
+                <p className="text-sm">Aguardando{restante !== null ? ` · expira em ${restante > 0 ? mmss(restante) : "instantes"}` : ""}</p>
+              </> : <p className="font-bold">{pointAtiva.status === "CRIANDO" ? "Enviando à maquininha…" : "Aguardando confirmação. Não repita o pagamento."}</p>}
               <div className="flex gap-2">
                 <button onClick={cancelarPagamentoAtivo} disabled={ocupado} className="flex-1 border-2 border-cb-marrom rounded-xl px-4 py-3 font-bold bg-white touch-manipulation disabled:opacity-50">Cancelar</button>
                 <button onClick={() => trocarParaPix(p.id)} disabled={ocupado} className="flex-1 bg-cb-marrom text-white rounded-xl px-4 py-3 font-bold touch-manipulation disabled:opacity-50">Trocar para Pix</button>
               </div>
             </div>}
+            {incerta && <button onClick={cancelarPagamentoAtivo} disabled={ocupado} className="border-2 border-cb-marrom rounded-xl px-4 py-3 font-bold bg-white touch-manipulation disabled:opacity-50">Cancelar</button>}
           </li>;
         })}
       </ol>
-      {conta.status === "ABERTA" && <button onClick={sair} className="border rounded-xl px-6 py-3 touch-manipulation">Cancelar divisão e voltar</button>}
+      {conta.status === "ABERTA" && <button onClick={sair} disabled={ocupado} className="border rounded-xl px-6 py-3 touch-manipulation disabled:opacity-50">Cancelar divisão e voltar</button>}
       <p className="text-sm text-cb-marrom/70">A conta só será concluída após todas as confirmações. O atendimento pode recuperar esta divisão em Contas divididas, mesmo após sair desta tela.</p>
     </> : sessao.current ? <p>A criação está sendo recuperada com a mesma chave. Não inicie um pagamento integral.</p> : <>
       <p className="text-xl">Total: <strong>{formatarMoeda(total)}</strong></p>

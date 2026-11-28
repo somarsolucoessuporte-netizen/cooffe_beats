@@ -7,7 +7,7 @@ import ts from 'typescript';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, '.test-dividir-conta');
 if (path.dirname(output) !== root || path.basename(output) !== '.test-dividir-conta') throw new Error('Invalid test directory');
-const files = ['lib/mercadopago.ts', 'lib/dividir-conta/domain.ts', 'lib/dividir-conta/client.ts', 'lib/dividir-conta/service.ts', 'lib/dividir-conta/legacy.ts', 'lib/dividir-conta/mercadopago.ts', 'tests/dividir-conta/route-harness.ts', 'tests/dividir-conta/financial.test.ts', 'lib/pix-estatico.ts', 'tests/pix-estatico.test.ts'];
+const files = ['lib/mercadopago.ts', 'lib/metodos-pagamento.ts', 'lib/dividir-conta/domain.ts', 'lib/dividir-conta/client.ts', 'lib/dividir-conta/service.ts', 'lib/dividir-conta/legacy.ts', 'lib/dividir-conta/mercadopago.ts', 'tests/dividir-conta/route-harness.ts', 'tests/dividir-conta/financial.test.ts', 'lib/pix-estatico.ts', 'tests/pix-estatico.test.ts'];
 for (const file of files) {
   const target = path.join(output, file.replace(/\.ts$/, '.js'));
   fs.mkdirSync(path.dirname(target), { recursive: true });

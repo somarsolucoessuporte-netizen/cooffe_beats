@@ -24,12 +24,18 @@ let consulta: Resultado | null = null;
 let consultas = 0;
 let cancelamentos = 0;
 let cancelOk = true;
+let abertas: string[] = [];
+let erroCriar: unknown = null;
+let fundo: Promise<void>[] = [];
+const opcoes = { segundoPlano: (fn: () => Promise<void>) => { fundo.push(fn()); } };
+const esperarFundo = async () => { await Promise.all(fundo.splice(0)); };
 const token = "a".repeat(64);
 const provider: Provedor = {
-  async criar() { creates++; if (failCreate) throw new Error("accepted remotely, response lost"); return { intentId: `intent-${creates}` }; },
+  async criar() { creates++; if (erroCriar) throw erroCriar; if (failCreate) throw new Error("accepted remotely, response lost"); return { intentId: `intent-${creates}` }; },
   async consultar() { consultas++; return consulta; },
   async criarPix() { creates++; if (failCreate) throw new Error("mp fora do ar"); return { orderId: `order-${creates}`, qrData: `000201-qr-${creates}` }; },
   async cancelar() { cancelamentos++; return cancelOk; },
+  async cancelarAberta(i) { abertas.push(i.intentId); return cancelOk; },
 };
 let service: ReturnType<typeof criarServico>;
 const originalFetch = globalThis.fetch;
@@ -49,6 +55,7 @@ before(async () => {
   await pg.exec(await readFile("prisma/migrations/20261110000000_dividir_conta/migration.sql", "utf8"));
   await pg.exec(`SET search_path=public`);
   await pg.exec(await readFile("prisma/migrations/20261117190000_divisao_tentativa_pix_qr/migration.sql", "utf8"));
+  await pg.exec(await readFile("prisma/migrations/20261128150000_divisao_erro_mp_encerrar_lease/migration.sql", "utf8"));
   globalThis.fetch = async () => { throw new Error("External network forbidden in isolated tests"); };
   process.env.MP_ACCESS_TOKEN = "TEST-ONLY-NOT-A-CREDENTIAL";
 });
@@ -64,8 +71,9 @@ beforeEach(async () => {
     INSERT INTO insumos (id,"empresaId",nome,unidade,"estoqueAtual","estoqueMinimo",custo,"updatedAt") VALUES ('insumo','empresa','Teste','un',10,0,2,CURRENT_TIMESTAMP);
     INSERT INTO ficha_tecnica_itens (id,"produtoId","insumoId",quantidade) VALUES ('ficha','produto','insumo',1);
     DELETE FROM "DivisaoOperacaoLegada";`);
-  enabled = true; creates = 0; failCreate = false; consulta = null; consultas = 0; cancelamentos = 0; cancelOk = true;
-  service = criarServico(db, provider, () => enabled);
+  enabled = true; creates = 0; failCreate = false; consulta = null; consultas = 0; cancelamentos = 0; cancelOk = true; abertas = []; erroCriar = null;
+  await esperarFundo();
+  service = criarServico(db, provider, () => enabled, () => undefined, opcoes);
   globalThis.fetch = async () => { throw new Error("External network forbidden in isolated tests"); };
 });
 
@@ -145,13 +153,17 @@ test("retry de criação recupera preço congelado mesmo após mudança no catá
   assert.equal((await db.query(`SELECT id FROM "Pedido"`)).length,1);
 });
 
-test("timeout mantém reserva e não reenvia nem com outra chave", async () => {
+test("timeout: a mesma chave nunca reenvia; nova tentativa explícita libera a anterior", async () => {
   const c = await draft(); failCreate = true;
   const t = await charge(c.id,c.parcelas[0].id);
   assert.equal(t.status,"DESCONHECIDO");
-  await charge(c.id,c.parcelas[0].id);
+  await charge(c.id,c.parcelas[0].id,t.chave as ReturnType<typeof randomUUID>);
   assert.equal(creates,1);
-  assert.equal((await service.resumo(c.id,token)).saldo,1000);
+  failCreate = false;
+  await charge(c.id,c.parcelas[0].id);
+  assert.equal(creates,2);
+  const r = await service.resumo(c.id,token);
+  assert.equal(r.saldo,1000); assert.equal(r.reservado,334);
 });
 
 test("timeout seguido de recuperação concorrente mantém reserva até webhook atrasado", async () => {
@@ -328,7 +340,7 @@ test("409: reconsulta cliente mostra reserva real e nunca reenvia POST", async (
   assert.equal(posts,1); assert.equal(gets,1); assert.equal(creates,1);
   assert.equal(resultado.conflito,true); assert.equal(resultado.conta.pago,0);
   assert.equal(resultado.conta.reservado,334); assert.equal(resultado.conta.saldo,1000);
-  assert.equal(resultado.conta.bloqueioCobranca,"PARCELA_EM_ANDAMENTO");
+  assert.equal(resultado.conta.bloqueioCobranca,null);
 });
 
 test("409: falha de reconsulta não inventa estado nem tenta cobrar de novo", async () => {
@@ -563,7 +575,7 @@ test("divisão sem tentativa pode ser cancelada sem apagar consumo ou impedir ca
 test("cancelar divisão funciona com cobrança pendente: cancela no MP e cancela a conta/pedido", async () => {
   const c=await draft(); await charge(c.id,c.parcelas[0].id);
   consulta=null;
-  const r=await service.cancelar(c.id,token);
+  const r=await service.cancelar(c.id,token); await esperarFundo();
   assert.equal(r.cancelada,true); assert.equal(cancelamentos,1);
   assert.equal((await db.query<{status:string}>(`SELECT status FROM "Pedido" WHERE id=$1`,[c.pedidoId]))[0].status,"CANCELADO");
   assert.equal((await db.query<{status:string}>(`SELECT status FROM "TentativaParcela"`))[0].status,"RECUSADO");
@@ -577,16 +589,57 @@ test("cancelar divisão preserva parcela já paga e devolve o saldo restante", a
   assert.equal((await service.resumo(c.id,token)).status,"ABERTA");
 });
 
-test("cancelar divisão não cancela a conta se o MP não confirmou o cancelamento (nunca libera cobrança possivelmente paga)", async () => {
-  const c=await draft(); await charge(c.id,c.parcelas[0].id);
+test("cancelar divisão encerra na hora mesmo sem o MP confirmar; aprovação tardia conta e vai para revisão", async () => {
+  const c=await draft(); const t=await charge(c.id,c.parcelas[0].id);
   cancelOk=false;
-  const r=await service.cancelar(c.id,token);
-  assert.equal(r.cancelada,false); assert.equal(r.pendentes,1);
+  const r=await service.cancelar(c.id,token); await esperarFundo();
+  assert.equal(r.cancelada,true); assert.match(r.aviso ?? "",/maquininha/);
+  await service.receber(paid(t),"tardio"); await service.receber(paid(t),"tardio-repetido");
+  const f=await service.resumo(c.id,token);
+  assert.equal(f.pago,334); assert.equal(f.status,"REVISAO"); assert.equal(f.parcelas[0].status,"APROVADO");
+});
+
+test("sem intentId: cancelar, trocar para Pix e cartão de outra pessoa funcionam na hora", async () => {
+  const c=await draft(); failCreate=true; await charge(c.id,c.parcelas[0].id); failCreate=false;
+  await charge(c.id,c.parcelas[1].id); assert.equal(creates,2);
+  await service.cancelarPagamento(c.id,token); await esperarFundo();
+  failCreate=true; await charge(c.id,c.parcelas[0].id); failCreate=false;
+  const r=await service.cobrarPix(c.id,token,c.parcelas[0].id,randomUUID());
+  assert.equal(r.pix.length,1);
+  assert.equal((await service.cancelar(c.id,token)).cancelada,true);
+});
+
+test("recusa 4xx grava status e motivo; 5xx fica DESCONHECIDO", async () => {
+  const c=await draft();
+  erroCriar={status:400,message:"amount too low",error:"bad_request"};
+  const a=await charge(c.id,c.parcelas[0].id);
+  assert.equal(a.status,"RECUSADO"); assert.equal(a.mpStatus,400); assert.match(a.mpErro ?? "",/amount too low/);
+  erroCriar={status:502,message:"gateway"};
+  const b=await charge(c.id,c.parcelas[1].id);
+  assert.equal(b.status,"DESCONHECIDO"); assert.equal(b.mpStatus,502);
+});
+
+test("mínimo no cartão recusa antes de chamar o MP; Pix continua", async () => {
+  const id=await service.criar({ ...input(), valores:[50,950] });
+  const c=await service.resumo(id,token); assert.equal(c.minimoCartao,100);
+  await assert.rejects(charge(id,c.parcelas[0].id),/Mínimo no cartão/);
+  assert.equal(creates,0);
+  await service.cobrarPix(id,token,c.parcelas[0].id,randomUUID());
+});
+
+test("nova cobrança cancela intenção integral antiga aberta e preserva a recusada pelo MP", async () => {
+  await pagamentoPendentePoint({provider:"mercadopago",deviceId:"point",paymentIntentId:"aberta"},"antiga","10 minutes");
+  const c=await draft(); cancelOk=false; await charge(c.id,c.parcelas[0].id);
+  assert.deepEqual(abertas,["aberta"]);
+  assert.equal((await db.query(`SELECT id FROM "Pagamento" WHERE status='PENDENTE'`)).length,1);
+  cancelOk=true; await service.cancelarPagamento(c.id,token); await esperarFundo();
+  await charge(c.id,c.parcelas[0].id);
+  assert.equal((await db.query(`SELECT id FROM "Pagamento" WHERE status='CANCELADO'`)).length,1);
 });
 
 test("'Cancelar esse pagamento' cancela a tentativa ativa no MP e libera a parcela", async () => {
   const c=await draft(); await charge(c.id,c.parcelas[0].id);
-  const r=await service.cancelarPagamento(c.id,token);
+  const r=await service.cancelarPagamento(c.id,token); await esperarFundo();
   assert.equal(r.reservado,0); assert.equal(r.naoCancelados,0); assert.equal(cancelamentos,1);
   await charge(c.id,c.parcelas[0].id); assert.equal(creates,2);
 });

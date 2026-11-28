@@ -1,5 +1,5 @@
 import { MercadoPagoConfig, Payment, Point } from "mercadopago";
-import { criarPagamentoPoint, criarPixQRCode, cancelarOrderMp, cancelarPaymentIntentPoint } from "../mercadopago";
+import { criarPagamentoPoint, criarPixQRCode, cancelarOrderMp, cancelarPaymentIntentPoint, cancelarPagamentoPoint } from "../mercadopago";
 import { ehPixQr } from "./domain";
 import type { Provedor, Resultado } from "./domain";
 import { metodoDoMp } from "../metodos-pagamento";
@@ -78,6 +78,10 @@ export const mercadoPagoDivisao: Provedor = {
   async cancelar(input) {
     if (!input.intentId) return false;
     return ehPixQr(input.deviceId) ? cancelarOrderMp(input.intentId) : cancelarPaymentIntentPoint(input.deviceId, input.intentId);
+  },
+  async cancelarAberta(input) {
+    try { await cancelarPagamentoPoint(input.deviceId, input.intentId); return true; }
+    catch { return false; }
   },
   async consultar(input) {
     if (input.intentId && ehPixQr(input.deviceId)) return resultadoOrder(input.intentId);

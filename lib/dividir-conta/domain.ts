@@ -55,8 +55,24 @@ export interface Provedor {
   consultar(input: { referencia: string; intentId: string | null; deviceId?: string }): Promise<Resultado | null>;
   /** true = cancelada (ou já encerrada); false = não foi possível cancelar agora. Nunca lança. */
   cancelar(input: { intentId: string | null; deviceId: string }): Promise<boolean>;
+  /** Cancela só uma intenção ainda aberta. false = já encerrada, em andamento na maquininha ou falhou. Nunca lança. */
+  cancelarAberta(input: { intentId: string; deviceId: string }): Promise<boolean>;
 }
 
 export type Conta = { id: string; pedidoId: string; empresaId: string; tokenHash: string; criacaoHash: string; total: number; status: string; fingerprint: string; requestHash: string; notificada: boolean };
 export type Parcela = { id: string; contaId: string; ordem: number; valor: number; status: string };
-export type Tentativa = { id: string; parcelaId: string; contaId: string; chave: string; referencia: string; deviceId: string; intentId: string | null; paymentId: string | null; status: EstadoTentativa; valor: number; metodo: string | null; qrData?: string | null; criadoEm?: Date | string };
+export type Tentativa = { id: string; parcelaId: string; contaId: string; chave: string; referencia: string; deviceId: string; intentId: string | null; paymentId: string | null; status: EstadoTentativa; valor: number; metodo: string | null; qrData?: string | null; criadoEm?: Date | string; mpStatus?: number | null; mpErro?: string | null };
+
+export const MINIMO_CARTAO_PADRAO = 100;
+
+/**
+ * Erro da criação da cobrança na Point. Definitivo = o Mercado Pago recusou (4xx, menos 408):
+ * nenhuma cobrança foi criada. Timeout, 5xx e rede ficam indeterminados.
+ */
+export function erroMp(e: unknown) {
+  const x = (typeof e === "object" && e ? e : {}) as { status?: unknown; message?: unknown; error?: unknown; causes?: unknown };
+  const status = Number(x.status) || 0;
+  const causas = Array.isArray(x.causes) ? x.causes.map((c: { code?: unknown; description?: unknown }) => [c?.code, c?.description].filter(Boolean).join(" ")) : [];
+  const mensagem = [x.error, x.message, ...causas].filter(v => typeof v === "string" && v).join(" | ").replace(/(APP_USR|TEST|Bearer)[-\s][\w-]+/g, "[oculto]").slice(0, 300) || "Erro desconhecido";
+  return { status, mensagem, definitivo: status >= 400 && status < 500 && status !== 408 };
+}

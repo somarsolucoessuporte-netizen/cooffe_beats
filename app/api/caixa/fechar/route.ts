@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { liberarExpiradas, listarPendencias, resolverPendencias, resumoCaixa } from "@/lib/caixa-fechamento";
+import { cancelarPedidosSemPagamento, liberarExpiradas, listarPendencias, resolverPendencias, resumoCaixa } from "@/lib/caixa-fechamento";
 import type { Caixa } from "@prisma/client";
 
 export const maxDuration = 30;
@@ -61,7 +61,7 @@ export async function GET() {
  * Body: { caixaId?, observacao?, valorFechamento?, resolver?: boolean, forcar?: boolean }
  * - caixaId: o caixa que a tela está fechando. Evita que uma aba antiga feche um caixa aberto depois.
  * - resolver: cancela as pendências ativas (no Mercado Pago em segundo plano) antes de fechar.
- * - forcar: fecha mesmo com pendências, registrando-as na observação do caixa.
+ * - forcar: cancela antes o que não recebeu nenhum valor; o que restar é registrado na observação.
  * Idempotente: se o caixa já estiver fechado, responde sucesso com o resumo existente.
  */
 export async function POST(req: Request) {
@@ -79,12 +79,23 @@ export async function POST(req: Request) {
     if (caixa.status !== "ABERTO") return await sucesso(empresaId, caixa, true);
 
     await liberarExpiradas(caixa.id);
-    if (body.resolver) await resolverPendencias(empresaId, caixa.id);
+    if (body.resolver || body.forcar) await resolverPendencias(empresaId, caixa.id);
+    if (body.forcar) await cancelarPedidosSemPagamento(empresaId, caixa.id);
     const pendencias = await listarPendencias(caixa.id);
 
     if (pendencias.length && !body.forcar) {
       return falha(
         `Há ${pendencias.length} pendência(s) neste caixa. Resolva-as ou feche mesmo assim.`,
+        409,
+        { pendencias },
+      );
+    }
+
+    // O banco impede fechar com divisão em aberto: sobra apenas a que tem valor recebido ou está em revisão.
+    const divisoes = pendencias.filter(p => p.tipo === "DIVISAO");
+    if (divisoes.length) {
+      return falha(
+        `O caixa continua aberto: há divisão de conta com valor recebido ou em revisão (${divisoes.map(p => `total R$ ${p.valor.toFixed(2)}, recebido R$ ${p.pago.toFixed(2)}`).join("; ")}). Conclua em Contas divididas.`,
         409,
         { pendencias },
       );

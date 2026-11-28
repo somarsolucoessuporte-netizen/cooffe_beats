@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { ATIVOS, centavos, DivisaoError, ehPixQr, PIX_QR, validarParcelas } from "./domain";
+import { ATIVOS, centavos, DivisaoError, ehPixQr, erroMp, MINIMO_CARTAO_PADRAO, PIX_QR, validarParcelas } from "./domain";
 import type { Conta, Database, Parcela, Provedor, Resultado, Sql, Tentativa } from "./domain";
 
 export type ItemDivisao = { produtoId: string; quantidade: number; preco: number; observacao?: string; adicionais?: { adicionalId: string; preco: number }[] };
@@ -9,6 +9,18 @@ function exigirToken(token: string) {
   if (!/^[a-f0-9]{64}$/.test(token)) throw new DivisaoError("Acesso inválido", 401);
 }
 export async function lock(tx: Sql) { await tx.query(`SELECT id FROM "DivisaoControle" WHERE id = 1 FOR UPDATE`); }
+
+/**
+ * Tentativas da Point sem intentId (a cobrança não foi criada ou não foi confirmada) não podem prender
+ * a parcela nem a maquininha: são encerradas na hora. Aprovação tardia ainda é contabilizada por receber().
+ * CRIANDO com menos de 1 min é uma criação em andamento. Contas em revisão não são tocadas.
+ */
+async function liberarSemCobranca(sql: Sql, parcelaId: string | null, deviceId: string | null, excluir = "") {
+  await sql.query(`UPDATE "TentativaParcela" t SET status='RECUSADO' FROM "ContaDividida" c
+    WHERE c.id=t."contaId" AND c.status<>'REVISAO' AND t."intentId" IS NULL AND t."deviceId" NOT LIKE 'PIX_%' AND t.id<>$3
+      AND (t.status='DESCONHECIDO' OR (t.status='CRIANDO' AND t."criadoEm" < CURRENT_TIMESTAMP - INTERVAL '1 minute'))
+      AND (t."parcelaId"=$1::text OR t."deviceId"=$2::text) RETURNING t.id`, [parcelaId, deviceId, excluir]);
+}
 
 async function bloqueioCobranca(sql: Sql, deviceId?: string) {
   // Só bloqueia o que está realmente em andamento: tentativa ativa da Point, operação integral
@@ -21,9 +33,10 @@ async function bloqueioCobranca(sql: Sql, deviceId?: string) {
       WHERE status IN ('CRIANDO','PENDENTE','DESCONHECIDO')
         AND "deviceId" NOT LIKE 'PIX_%'
         AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '8 minutes'
+        AND ("intentId" IS NOT NULL OR status='PENDENTE' OR (status='CRIANDO' AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '1 minute'))
         AND ($1::text IS NULL OR "deviceId"=$1)
     UNION ALL SELECT 'OPERACAO_INDETERMINADA' AS motivo FROM "DivisaoOperacaoLegada"
-      WHERE "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '3 minutes'
+      WHERE "encerradoEm" IS NULL AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '3 minutes'
     UNION ALL SELECT 'POINT_INTEGRAL_PENDENTE' AS motivo FROM "Pagamento"
       WHERE status='PENDENTE'
         AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '6 minutes'
@@ -34,7 +47,14 @@ async function bloqueioCobranca(sql: Sql, deviceId?: string) {
   return bloqueio?.motivo ?? null;
 }
 
-export function criarServico(db: Database, provider: Provedor, enabled: () => boolean, deviceAtual: () => string | undefined = () => undefined) {
+export function criarServico(db: Database, provider: Provedor, enabled: () => boolean, deviceAtual: () => string | undefined = () => undefined, opcoes: { segundoPlano?: (fn: () => Promise<void>) => void; minimoCartao?: () => number } = {}) {
+  const segundoPlano = opcoes.segundoPlano ?? ((fn: () => Promise<void>) => { void fn().catch(() => {}); });
+  const minimoCartao = opcoes.minimoCartao ?? (() => MINIMO_CARTAO_PADRAO);
+  const comLimite = (p: Promise<unknown>, ms: number) => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([p.catch(() => {}), new Promise(r => { t = setTimeout(r, ms); })]).finally(() => clearTimeout(t));
+  };
+
   async function autorizar(tx: Sql, id: string, token: string): Promise<Conta> {
     exigirToken(token);
     const [conta] = await tx.query<Conta>(`SELECT * FROM "ContaDividida" WHERE id = $1`, [id]);
@@ -91,13 +111,17 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
     const c = await autorizar(db, id, token);
     const parcelas = await db.query<Parcela>(`SELECT * FROM "ParcelaConta" WHERE "contaId" = $1 ORDER BY ordem`, [id]);
     const tentativas = await db.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "contaId" = $1 ORDER BY "criadoEm", id`, [id]);
+    const naMaquininha = (t: Tentativa) => ATIVOS.includes(t.status as typeof ATIVOS[number]) && !t.deviceId.startsWith("PIX_") && !!t.criadoEm
+      && Date.now() - new Date(t.criadoEm).getTime() < 8 * 60000
+      && (!!t.intentId || t.status === "PENDENTE" || (t.status === "CRIANDO" && Date.now() - new Date(t.criadoEm).getTime() < 60000));
     const pago = tentativas.filter(t => t.status === "APROVADO").reduce((s, t) => s + t.valor, 0);
     const reservado = tentativas.filter(t => ATIVOS.includes(t.status as typeof ATIVOS[number])).reduce((s, t) => s + t.valor, 0);
     const [pedido] = await db.query<{ senha: string }>(`SELECT senha FROM "Pedido" WHERE id = $1`, [c.pedidoId]);
     return { id, pedidoId: c.pedidoId, senha: pedido.senha, total: c.total, pago, reservado, saldo: c.total - pago, status: c.status, habilitada: enabled(), bloqueioCobranca: await bloqueioCobranca(db, deviceAtual()),
       pix: tentativas.filter(t => ehPixQr(t.deviceId) && ATIVOS.includes(t.status as typeof ATIVOS[number]) && t.qrData).map(t => ({ tentativaId: t.id, parcelaId: t.parcelaId, qrData: t.qrData as string, valor: t.valor })),
-      maquininha: (() => { const t = tentativas.find(x => ATIVOS.includes(x.status as typeof ATIVOS[number]) && !x.deviceId.startsWith("PIX_") && x.criadoEm && Date.now() - new Date(x.criadoEm).getTime() < 8 * 60000); const p = t && parcelas.find(x => x.id === t.parcelaId); return p ? { parcelaId: p.id, ordem: p.ordem } : null; })(),
-      parcelas: parcelas.map(p => ({ ...p, tentativas: tentativas.filter(t => t.parcelaId === p.id).map(t => ({ id: t.id, status: t.status, meio: ehPixQr(t.deviceId) ? "PIX" : "POINT", criadoEm: t.criadoEm ? new Date(t.criadoEm).toISOString() : null })) })) };
+      minimoCartao: minimoCartao(),
+      maquininha: (() => { const t = tentativas.find(naMaquininha); const p = t && parcelas.find(x => x.id === t.parcelaId); return p ? { parcelaId: p.id, ordem: p.ordem } : null; })(),
+      parcelas: parcelas.map(p => ({ ...p, tentativas: tentativas.filter(t => t.parcelaId === p.id).map(t => ({ id: t.id, status: t.status, meio: ehPixQr(t.deviceId) ? "PIX" : "POINT", criadoEm: t.criadoEm ? new Date(t.criadoEm).toISOString() : null, temCobranca: !!t.intentId, motivo: t.mpErro ?? null })) })) };
   }
 
   async function cobrar(id: string, token: string, parcelaId: string, chave: string, deviceId: string) {
@@ -108,7 +132,7 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
     await expirarPendentes(id).catch(() => {});
     // Tentativas vencidas de OUTRAS contas (abandonadas) também são encerradas em segundo plano:
     // antes, uma tentativa velha de outra conta mantinha a maquininha "em uso" para sempre.
-    await Promise.race([expirarPendentes().catch(() => {}), new Promise(r => setTimeout(r, 6000))]);
+    await comLimite(expirarPendentes(), 6000);
     const reserva = await db.transaction(async tx => {
       await lock(tx);
       const conta = await autorizar(tx, id, token);
@@ -120,9 +144,13 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
       if (conta.status !== "ABERTA") throw new DivisaoError("Conta quitada ou em revisão");
       const [parte] = await tx.query<Parcela>(`SELECT * FROM "ParcelaConta" WHERE id = $1 AND "contaId" = $2`, [parcelaId, id]);
       if (!parte || parte.status !== "ABERTA") throw new DivisaoError("Parcela indisponível");
+      const minimo = minimoCartao();
+      if (parte.valor < minimo) throw new DivisaoError(`Mínimo no cartão: R$ ${(minimo / 100).toFixed(2).replace(".", ",")} — use Pix`, 400);
+      await liberarSemCobranca(tx, parcelaId, deviceId);
       const [ativa] = await tx.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "parcelaId" = $1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO','REVISAO')`, [parcelaId]);
       if (ativa) return { tentativa: ativa, nova: false };
-      if (await bloqueioCobranca(tx, deviceId)) throw new DivisaoError("Há pagamento em andamento. Aguarde a confirmação antes de usar a maquininha");
+      const [ocupada] = await tx.query(`SELECT id FROM "TentativaParcela" WHERE "deviceId"=$1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO')`, [deviceId]);
+      if (ocupada || await bloqueioCobranca(tx, deviceId)) throw new DivisaoError("Há pagamento em andamento. Aguarde a confirmação antes de usar a maquininha");
       const [saldo] = await tx.query<{ usado: number }>(`SELECT COALESCE(SUM(valor),0)::integer AS usado FROM "TentativaParcela" WHERE "contaId" = $1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO','APROVADO','REVISAO')`, [id]);
       if (saldo.usado + parte.valor > conta.total) throw new DivisaoError("Saldo insuficiente");
       const tentativaId = randomUUID();
@@ -130,12 +158,20 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
       return { tentativa, nova: true };
     });
     if (reserva.nova) {
+      const t = reserva.tentativa;
+      await comLimite(liberarCobrancasAnteriores(deviceId), 6000);
       try {
-        const result = await provider.criar({ referencia: reserva.tentativa.referencia, valorCentavos: reserva.tentativa.valor, deviceId });
-        await db.query(`UPDATE "TentativaParcela" SET "intentId" = COALESCE("intentId",$2), status = CASE WHEN status = 'CRIANDO' THEN 'PENDENTE' ELSE status END WHERE id = $1 RETURNING id`, [reserva.tentativa.id, result.intentId]);
-      } catch {
+        const result = await provider.criar({ referencia: t.referencia, valorCentavos: t.valor, deviceId });
+        const [atual] = await db.query<Tentativa>(`UPDATE "TentativaParcela" SET "intentId" = COALESCE("intentId",$2), status = CASE WHEN status = 'CRIANDO' THEN 'PENDENTE' ELSE status END WHERE id = $1 RETURNING *`, [t.id, result.intentId]);
+        // Cancelada pelo usuário enquanto era criada: desfaz na maquininha.
+        if (atual?.status === "RECUSADO") segundoPlano(() => desfazerNaPoint(atual));
+      } catch (e) {
         // Never reissue automatically: the remote call may have succeeded.
-        await db.query(`UPDATE "TentativaParcela" SET status = 'DESCONHECIDO' WHERE id = $1 AND status IN ('CRIANDO','PENDENTE') RETURNING id`, [reserva.tentativa.id]);
+        const erro = erroMp(e);
+        console.error("[Divisão Point] cobrança não criada", { tentativaId: t.id, valorCentavos: t.valor, httpStatus: erro.status, erro: erro.mensagem });
+        await db.query(`UPDATE "TentativaParcela" SET "mpStatus"=$2, "mpErro"=$3 WHERE id=$1 RETURNING id`, [t.id, erro.status || null, erro.mensagem]);
+        if (erro.definitivo) await receber({ referencia: t.referencia, status: "FAILED" }, `criacao-recusada:${t.id}`);
+        else await db.query(`UPDATE "TentativaParcela" SET status = 'DESCONHECIDO' WHERE id = $1 AND status IN ('CRIANDO','PENDENTE') RETURNING id`, [t.id]);
       }
     }
     return resumo(id, token);
@@ -160,6 +196,7 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
       if (conta.status !== "ABERTA") throw new DivisaoError("Conta quitada ou em revisão");
       const [parte] = await tx.query<Parcela>(`SELECT * FROM "ParcelaConta" WHERE id = $1 AND "contaId" = $2`, [parcelaId, id]);
       if (!parte || parte.status !== "ABERTA") throw new DivisaoError("Parcela indisponível");
+      await liberarSemCobranca(tx, parcelaId, null);
       const [ativa] = await tx.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "parcelaId" = $1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO','REVISAO')`, [parcelaId]);
       if (ativa) return { tentativa: ativa, nova: false };
       const [saldo] = await tx.query<{ usado: number }>(`SELECT COALESCE(SUM(valor),0)::integer AS usado FROM "TentativaParcela" WHERE "contaId" = $1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO','APROVADO','REVISAO')`, [id]);
@@ -224,15 +261,17 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
   /**
    * Encerra uma tentativa ativa: confere o resultado, cancela no Mercado Pago (Point ou order QR)
    * e só então libera. Se pagou nesse meio tempo, registra o pagamento. Nunca lança.
-   * "mantida" = não foi possível cancelar agora; a reserva continua (nunca libera cobrança possivelmente paga).
+   * "mantida" = não foi possível cancelar agora; a reserva continua. Tentativa da Point sem intentId
+   * é liberada na hora.
    */
   async function encerrarTentativa(t: Tentativa): Promise<"paga" | "liberada" | "mantida"> {
     try {
+      if (!t.intentId && !t.deviceId.startsWith("PIX_")) { await cancelarAgora(t); return "liberada"; }
       const antes = await provider.consultar({ referencia: t.referencia, intentId: t.intentId, deviceId: t.deviceId });
       if (antes && antes.status !== "PENDING") { await receber(antes, `encerrar:${hashToken(JSON.stringify(antes))}`); return antes.status === "FAILED" ? "liberada" : "paga"; }
       const cancelada = t.intentId ? await provider.cancelar({ intentId: t.intentId, deviceId: t.deviceId }) : false;
       const idadeMin = t.criadoEm ? (Date.now() - new Date(t.criadoEm).getTime()) / 60000 : 0;
-      // Sem intentId a criação ficou indeterminada: só libera depois de 16 min sem nenhum pagamento localizado
+      // Pix sem order a criação ficou indeterminada: só libera depois de 16 min sem nenhum pagamento localizado
       if (!cancelada && !(!t.intentId && idadeMin > 16)) return "mantida";
       const depois = await provider.consultar({ referencia: t.referencia, intentId: t.intentId, deviceId: t.deviceId });
       if (depois && (depois.status === "PAID" || depois.status === "REVIEW")) { await receber(depois, `encerrar:${hashToken(JSON.stringify(depois))}`); return "paga"; }
@@ -241,6 +280,57 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
     } catch (e) {
       console.warn("[Divisão] não encerrou tentativa", t.id, e instanceof Error ? e.message : e);
       return "mantida";
+    }
+  }
+
+  /**
+   * Cancelamento pedido na tela: a Point é encerrada localmente na hora e cancelada no MP em segundo
+   * plano. O Pix QR mantém a regra própria (só libera com a order cancelada). Nunca lança.
+   */
+  async function cancelarAgora(t: Tentativa): Promise<"paga" | "liberada" | "mantida"> {
+    if (ehPixQr(t.deviceId)) return encerrarTentativa(t);
+    try {
+      await receber({ referencia: t.referencia, intentId: t.intentId ?? undefined, status: "FAILED" }, `cancelar:${t.id}`);
+      segundoPlano(() => desfazerNaPoint(t));
+      return "liberada";
+    } catch (e) {
+      console.warn("[Divisão] não cancelou tentativa", t.id, e instanceof Error ? e.message : e);
+      return "mantida";
+    }
+  }
+
+  /** Cancela a intenção no MP e confere se houve pagamento: dinheiro recebido nunca é ignorado. */
+  async function desfazerNaPoint(t: Tentativa) {
+    try {
+      if (t.intentId && !await provider.cancelar({ intentId: t.intentId, deviceId: t.deviceId })) {
+        console.warn("[Divisão Point] intenção não cancelada no MP", { tentativaId: t.id, intentId: t.intentId });
+        await db.query(`UPDATE "TentativaParcela" SET "mpErro"=$2 WHERE id=$1 RETURNING id`, [t.id, "Cancelada aqui; o Mercado Pago não confirmou o cancelamento na maquininha"]);
+      }
+      const r = await provider.consultar({ referencia: t.referencia, intentId: t.intentId, deviceId: t.deviceId });
+      if (r && (r.status === "PAID" || r.status === "REVIEW")) await receber(r, `pos-cancelamento:${hashToken(JSON.stringify(r))}`);
+    } catch (e) {
+      console.warn("[Divisão Point] conferência após cancelamento falhou", t.id, e instanceof Error ? e.message : e);
+    }
+  }
+
+  /**
+   * Antes de uma nova cobrança, cancela o que ficou aberto na mesma Point (como no pagamento normal).
+   * O que está em andamento não é tocado: pagamentos recentes já bloqueiam a divisão e o MP recusa
+   * cancelar uma intenção que a maquininha já está processando.
+   */
+  async function liberarCobrancasAnteriores(deviceId: string) {
+    const canceladas = await db.query<{ intentId: string }>(`SELECT "intentId" FROM "TentativaParcela"
+      WHERE "deviceId"=$1 AND status='RECUSADO' AND "intentId" IS NOT NULL AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '60 minutes'
+      ORDER BY "criadoEm" DESC LIMIT 3`, [deviceId]);
+    for (const c of canceladas) await provider.cancelarAberta({ deviceId, intentId: c.intentId });
+    const integrais = await db.query<{ id: string; pedidoId: string; intentId: string }>(`SELECT id,"pedidoId",payload->>'paymentIntentId' AS "intentId" FROM "Pagamento"
+      WHERE status='PENDENTE' AND payload->>'provider'='mercadopago' AND payload->>'deviceId'=$1 AND payload->>'paymentIntentId' IS NOT NULL
+        AND "criadoEm" > CURRENT_TIMESTAMP - INTERVAL '60 minutes' AND "criadoEm" <= CURRENT_TIMESTAMP - INTERVAL '6 minutes'
+      LIMIT 3`, [deviceId]);
+    for (const p of integrais) {
+      if (!await provider.cancelarAberta({ deviceId, intentId: p.intentId })) continue;
+      await db.query(`UPDATE "Pagamento" SET status='CANCELADO' WHERE id=$1 AND status='PENDENTE' RETURNING id`, [p.id]);
+      await db.query(`UPDATE "Pedido" SET status='CANCELADO',"atualizadoEm"=CURRENT_TIMESTAMP WHERE id=$1 AND status='AGUARDANDO_PAGAMENTO' RETURNING id`, [p.pedidoId]);
     }
   }
 
@@ -254,13 +344,16 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
     return velhas.length;
   }
 
-  /** "Cancelar esse pagamento": cancela as tentativas ativas da conta no MP e libera as parcelas. */
+  const AVISO_MAQUININHA = "Cancelado no sistema. Se a cobrança ainda aparecer na maquininha, cancele nela.";
+  const naPoint = (t: Tentativa) => !!t.intentId && !ehPixQr(t.deviceId);
+
+  /** "Cancelar esse pagamento": encerra as tentativas ativas da conta e libera as parcelas. */
   async function cancelarPagamento(id: string, token: string) {
     await autorizar(db, id, token);
     const ativas = await db.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "contaId"=$1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO')`, [id]);
-    const resultados = await Promise.all(ativas.map(encerrarTentativa));
+    const resultados = await Promise.all(ativas.map(cancelarAgora));
     const naoCancelados = resultados.filter(r => r === "mantida").length;
-    return { ...(await resumo(id, token)), naoCancelados };
+    return { ...(await resumo(id, token)), naoCancelados, aviso: ativas.some(naPoint) ? AVISO_MAQUININHA : undefined };
   }
 
   async function receber(resultado: Resultado, eventoId: string) {
@@ -286,12 +379,15 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
         const [parcelaPaga] = await tx.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "parcelaId" = $1 AND status = 'APROVADO' AND id <> $2`, [t.parcelaId, t.id]);
         revisao = !r.paymentId || r.valorCentavos !== t.valor || r.moeda !== "BRL" || !!outra || !!parcelaPaga || (!!t.paymentId && t.paymentId !== r.paymentId) || (!!r.intentId && !!t.intentId && r.intentId !== t.intentId);
         if (!revisao && t.status !== "REVISAO") {
-          // A late approval is real money. If another attempt exists, freeze it too.
+          // A late approval is real money: count it. A conflict (another live attempt on the
+          // installment, or a cancelled account) additionally sends the account to review.
+          await liberarSemCobranca(tx, t.parcelaId, null, t.id);
           const concorrentes = await tx.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "parcelaId" = $1 AND id <> $2 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO','REVISAO')`, [t.parcelaId, t.id]);
-          if (concorrentes.length) revisao = true;
-          else {
-            await tx.query(`UPDATE "TentativaParcela" SET status='APROVADO', "paymentId"=$2, "intentId"=COALESCE("intentId",$3), metodo=$4, "aprovadoEm"=COALESCE("aprovadoEm",CURRENT_TIMESTAMP) WHERE id=$1 RETURNING id`, [t.id, r.paymentId, r.intentId ?? null, r.metodo ?? "OUTRO"]);
-            await tx.query(`UPDATE "ParcelaConta" SET status='APROVADO' WHERE id=$1 RETURNING id`, [t.parcelaId]);
+          await tx.query(`UPDATE "TentativaParcela" SET status='APROVADO', "paymentId"=$2, "intentId"=COALESCE("intentId",$3), metodo=$4, "aprovadoEm"=COALESCE("aprovadoEm",CURRENT_TIMESTAMP) WHERE id=$1 RETURNING id`, [t.id, r.paymentId, r.intentId ?? null, r.metodo ?? "OUTRO"]);
+          await tx.query(`UPDATE "ParcelaConta" SET status='APROVADO' WHERE id=$1 RETURNING id`, [t.parcelaId]);
+          if (concorrentes.length || c.status === "CANCELADA") {
+            await tx.query(`UPDATE "ContaDividida" SET status='REVISAO' WHERE id=$1 RETURNING id`, [c.id]);
+            await tx.query(`UPDATE "Pedido" SET pago=FALSE WHERE id=$1 AND status<>'CANCELADO' RETURNING id`, [c.pedidoId]);
           }
         }
       } else if (r.status === "FAILED" && ATIVOS.includes(t.status as typeof ATIVOS[number])) {
@@ -305,7 +401,7 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
           await tx.query(`UPDATE "TentativaParcela" SET status=$2 WHERE id=$1 RETURNING id`, [t.id, estado]);
         }
         await tx.query(`UPDATE "ParcelaConta" SET status='REVISAO' WHERE id=$1 RETURNING id`, [t.parcelaId]);
-        await tx.query(`UPDATE "Pedido" SET pago=FALSE WHERE id=$1 RETURNING id`, [c.pedidoId]);
+        await tx.query(`UPDATE "Pedido" SET pago=FALSE WHERE id=$1 AND status<>'CANCELADO' RETURNING id`, [c.pedidoId]);
       }
       const [saldo] = await tx.query<{ pago: number; ativos: number }>(`SELECT COALESCE(SUM(valor) FILTER (WHERE status='APROVADO'),0)::integer AS pago, COUNT(*) FILTER (WHERE status IN ('CRIANDO','PENDENTE','DESCONHECIDO','REVISAO'))::integer AS ativos FROM "TentativaParcela" WHERE "contaId"=$1`, [c.id]);
       const [atual] = await tx.query<Conta>(`SELECT * FROM "ContaDividida" WHERE id=$1`, [c.id]);
@@ -384,18 +480,19 @@ export function criarServico(db: Database, provider: Provedor, enabled: () => bo
   async function cancelar(id: string, token: string) {
     await autorizar(db, id, token);
     const ativas = await db.query<Tentativa>(`SELECT * FROM "TentativaParcela" WHERE "contaId"=$1 AND status IN ('CRIANDO','PENDENTE','DESCONHECIDO')`, [id]);
-    await Promise.all(ativas.map(encerrarTentativa));
+    await Promise.all(ativas.map(cancelarAgora));
+    const aviso = ativas.some(naPoint) ? AVISO_MAQUININHA : undefined;
     return db.transaction(async tx => {
       await lock(tx);
       const c = await autorizar(tx, id, token);
-      if (c.status === "CANCELADA") return { cancelada: true, pago: 0, saldo: c.total, pendentes: 0 };
+      if (c.status === "CANCELADA") return { cancelada: true, pago: 0, saldo: c.total, pendentes: 0, aviso };
       const [x] = await tx.query<{ pago: number; pendentes: number }>(`SELECT COALESCE(SUM(valor) FILTER (WHERE status='APROVADO'),0)::integer AS pago, COUNT(*) FILTER (WHERE status IN ('CRIANDO','PENDENTE','DESCONHECIDO','REVISAO'))::integer AS pendentes FROM "TentativaParcela" WHERE "contaId"=$1`, [id]);
       if (c.status === "ABERTA" && x.pago === 0 && x.pendentes === 0) {
         await tx.query(`UPDATE "ContaDividida" SET status='CANCELADA' WHERE id=$1 RETURNING id`, [id]);
         await tx.query(`UPDATE "Pedido" SET status='CANCELADO',"atualizadoEm"=CURRENT_TIMESTAMP WHERE id=$1 AND status='AGUARDANDO_PAGAMENTO' RETURNING id`, [c.pedidoId]);
-        return { cancelada: true, pago: 0, saldo: c.total, pendentes: 0 };
+        return { cancelada: true, pago: 0, saldo: c.total, pendentes: 0, aviso };
       }
-      return { cancelada: false, pago: x.pago, saldo: c.total - x.pago, pendentes: x.pendentes };
+      return { cancelada: false, pago: x.pago, saldo: c.total - x.pago, pendentes: x.pendentes, aviso };
     });
   }
   // Called exclusively behind staff authentication and company authorization.
